@@ -32,3 +32,19 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 
 - [x] Build Telegram Web-inspired light/dark UI and chat composer preview (presentation only).
 - [ ] Confirm server Docker image rebuilt and HTML/CSS visible through public hostname after git pull.
+
+## Send endpoint incident
+
+- [x] Found real HTTP 500 with `RuntimeError: no running event loop` in
+  POST `/campaigns/{id}/send`, including campaign `QKgERa1BuzO_jrZoTp7Aso2D`.
+- [x] Change FastAPI Send endpoint to asynchronous so it can schedule Telethon
+  tasks on the server's running event loop.
+- [x] Limit orphaned-campaign recovery to server startup; CLI operations no
+  longer interrupt currently running broadcasts.
+- [x] Add offline regression test with a stubbed sender (no real messages).
+- [ ] Rebuild/recreate broadcaster container after updating code; then inspect
+  interrupted campaign statuses. No automatic resend.
+- [ ] Confirm future approved small test delivery via per-recipient results.
+- [ ] Fix cosmetic missing favicon (HTTP 404) if desired.
+- [ ] Review unexpected public exposure of port 8789 and secure direct origin
+  access before relying on short administrator passwords.

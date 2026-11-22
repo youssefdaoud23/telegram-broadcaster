@@ -106,15 +106,22 @@ CREATE INDEX IF NOT EXISTS idx_deliveries_campaign ON deliveries(campaign_id);
 """
 
 
-def init_db() -> None:
+def init_db(*, recover_inflight: bool = False) -> None:
+    """Create schema. Only app startup may interrupt orphaned in-flight campaigns.
+
+    CLI operations must not change active campaign state while the web service
+    is running. Never automatically retry uncertain Telegram deliveries.
+    """
     with database() as db:
         db.executescript(SCHEMA)
-        # Never retry a possibly partially sent broadcast after a process restart.
-        db.execute("UPDATE campaigns SET state='interrupted', completed_at=? WHERE state IN ('sending','queued')", (now(),))
-        db.execute("""
-            UPDATE deliveries SET state='unknown', error='Interrupted before delivery status was confirmed', updated_at=?
-            WHERE state='sending'
-        """, (now(),))
+        if recover_inflight:
+            # On a single-worker service startup, previous delivery tasks are gone.
+            # Mark them interrupted to prevent duplicate sends on restart.
+            db.execute("UPDATE campaigns SET state='interrupted', completed_at=? WHERE state IN ('sending','queued')", (now(),))
+            db.execute("""
+                UPDATE deliveries SET state='unknown', error='Interrupted before delivery status was confirmed', updated_at=?
+                WHERE state='sending'
+            """, (now(),))
         db.commit()
     try:
         os.chmod(db_path(), 0o600)

@@ -31,7 +31,7 @@ templates.env.filters["moment"] = (
 @app.on_event("startup")
 async def startup():
     core.encryption()  # Fail closed if encryption is not configured.
-    core.init_db()
+    core.init_db(recover_inflight=True)
 
 
 @app.middleware("http")
@@ -435,7 +435,7 @@ def campaign_page(request: Request, campaign_id: str):
 
 
 @app.post("/campaigns/{campaign_id}/send")
-def send_campaign(request: Request, campaign_id: str, csrf: str = Form("")):
+async def send_campaign(request: Request, campaign_id: str, csrf: str = Form("")):
     authorize(request,csrf)
     if os.getenv("SEND_ENABLED","false").lower() != "true":
         return redirect(f"/campaigns/{campaign_id}","Delivery is disabled in server settings. Preview is safe.")

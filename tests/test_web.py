@@ -100,6 +100,55 @@ class WebsiteTests(unittest.TestCase):
         self.assertIn('name="csrf"', compose.text)
         self.assertIn('action="/compose/preview"', compose.text)
 
+    def test_send_endpoint_schedules_on_running_loop_without_using_telegram(self):
+        import asyncio
+        import uuid
+        from unittest.mock import patch
+
+        csrf = self.sign_in()
+        account_id = uuid.uuid4().hex
+        with core.database() as db:
+            db.execute(
+                "INSERT INTO accounts(id,label,api_id,api_hash_enc,phone_enc,session_name,state,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,'connected',?,?)",
+                (account_id, "Offline sender", 12345, core.encrypt("dummy"), core.encrypt("+420123456789"),
+                 account_id, core.now(), core.now()),
+            )
+            contact_id = core.insert_contact(
+                db, core.normalize_contact("Offline contact", "@offlineexample", "", "", ""),
+                consent=True,
+            )
+            campaign_id = core.create_campaign(db, account_id, "Offline test only", [contact_id], 3)
+            db.commit()
+
+        # We must never create a TelegramClient or send a live message in tests.
+        # The replacement verifies the endpoint has an actual running event loop.
+        scheduled = []
+        def fake_enqueue(value):
+            self.assertIsNotNone(asyncio.get_running_loop())
+            scheduled.append(value)
+
+        os.environ["SEND_ENABLED"] = "true"
+        with patch("broadcaster.web.telegram.enqueue", side_effect=fake_enqueue):
+            response = self.testclient.post(
+                f"/campaigns/{campaign_id}/send",
+                data={"csrf": csrf}, follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            self.assertIn("Sending%20started", response.headers["location"])
+            duplicate = self.testclient.post(
+                f"/campaigns/{campaign_id}/send",
+                data={"csrf": csrf}, follow_redirects=False,
+            )
+            self.assertEqual(duplicate.status_code, 303)
+
+        self.assertEqual(scheduled, [campaign_id])
+        with core.database() as db:
+            campaign = db.execute("SELECT state FROM campaigns WHERE id=?", (campaign_id,)).fetchone()
+            delivery = db.execute("SELECT state FROM deliveries WHERE campaign_id=?", (campaign_id,)).fetchone()
+        self.assertEqual(campaign["state"], "queued")
+        self.assertEqual(delivery["state"], "pending")
+
     def test_add_contact_and_import(self):
         csrf=self.sign_in()
         response=self.testclient.post("/contacts",data={

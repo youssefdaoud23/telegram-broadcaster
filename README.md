@@ -113,6 +113,24 @@ Enter the existing username (for example `admin`) and choose any non-empty passw
 
 If you instead run `create-admin` with an existing username, the CLI now explains how to reset the password without displaying a Python database traceback.
 
+## Troubleshooting: Send returns HTTP 500 / no running event loop
+
+Versions before the sending-handler correction could record a campaign as queued
+then fail with `RuntimeError: no running event loop` because the synchronous
+FastAPI handler attempted to create an asynchronous Telethon task. The send
+route is now asynchronous, which permits scheduling on FastAPI's running loop.
+
+After pulling the corrected code, rebuild and recreate **only** the broadcaster
+container. Startup marks any orphaned `queued` or `sending` campaigns
+`interrupted` to prevent accidental duplicate deliveries. Review the
+per-recipient history before creating a new campaign; do not repeatedly click
+Send on an uncertain campaign.
+
+For accurate operational history, send failures must be checked against the
+persisted campaign/delivery states and Telegram's own chat history. The
+administrator CLI no longer triggers in-flight recovery when initializing its
+database connection.
+
 ## Deployment workflow
 
 Always use GitHub as the source of truth. Develop on a feature branch, run tests, merge into main, then update the separate server checkout:

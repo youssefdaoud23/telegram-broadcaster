@@ -135,7 +135,10 @@ class PersistenceTests(unittest.TestCase):
             db.execute("UPDATE campaigns SET state='sending' WHERE id=?",(campaign,))
             db.execute("UPDATE deliveries SET state='sending' WHERE campaign_id=?",(campaign,))
             db.commit()
-        core.init_db()
+        core.init_db()  # Ordinary maintenance/CLI initialization must not interrupt work.
+        with core.database() as db:
+            self.assertEqual(db.execute("SELECT state FROM campaigns WHERE id=?",(campaign,)).fetchone()["state"],"sending")
+        core.init_db(recover_inflight=True)  # Only actual app startup recovers orphaned work.
         with core.database() as db:
             self.assertEqual(db.execute("SELECT state FROM campaigns WHERE id=?",(campaign,)).fetchone()["state"],"interrupted")
             self.assertEqual(db.execute("SELECT state FROM deliveries WHERE campaign_id=?",(campaign,)).fetchone()["state"],"unknown")
