@@ -9,14 +9,14 @@
 - [x] Add contacts CRUD, CSV import/export, opt-in, and disabled state.
 - [x] Add compose/preview/send workflow, per-recipient delivery tracking, controlled backoff, interruption safety.
 - [x] Add responsive dashboard, accounts, contacts, compose, and history templates.
-- [x] Add offline tests and GitHub Actions CI.
-- [ ] Complete all security, unit, and UI smoke tests (unit tests currently pass after scrypt fix).
+- [x] Add offline tests; run them locally (GitHub Actions workflow removed at user request).
+- [x] Run local Python compilation, 9 offline unit/UI smoke tests, JavaScript syntax checks, and template parsing.
 - [ ] Fix defects found during full web app testing.
-- [ ] Merge feature branch to main and verify commit.
+- [ ] Fast-forward tested feature branch to main, verify commit; use git fetch/pull --ff-only on server.
 - [ ] Git pull --ff-only in independent production checkout.
 - [ ] Install protected configuration and admin, deploy new Docker service on 127.0.0.1:8789.
 - [ ] Verify HTTP health and protected web pages without sending messages.
 - [ ] Run approved small live send test only after explicit recipient confirmation.
-- [ ] Later: account removal, public HTTPS domain protected by access proxy, optional direct Google Sheets sync, CI/CD deploy.
+- [ ] Later: account removal, public HTTPS domain protected by access proxy, optional direct Google Sheets sync.
 
 Operational boundary: do not touch existing n8n or legacy personal Telegram bridge.
