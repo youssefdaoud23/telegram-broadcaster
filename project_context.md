@@ -345,6 +345,29 @@ spreadsheet formula safety treatment. No new DB tables or external apps.
 Production /opt not modified by developing this staging checkout.
 
 
+## Contact UI: live filtering, phones, and activation switches (2026-11-22)
+
+Contacts now renders the entire current user's active contact dataset,
+not just server-prefiltered rows. An instantaneous client-side search
+filters visible name, username, phone, Telegram user ID, notes, and group
+labels. Group dropdown filtering is also immediate and avoids reloads;
+changing filters clears any selections hidden by the new filter. The
+search result count and select-all reflect only visible contacts. The
+contact table shows phone and Telegram ID separately, with "Not available"
+when Telegram does not provide a phone. No extra Telegram requests occur.
+
+Group manage page replaces the prominent whole-group consent form with
+Active/Inactive actions for individual contacts and the whole group;
+phones and Telegram IDs are also visible in member rows. Owner- and
+CSRF-checked POST /contacts/{id}/status,
+/contacts/groups/{group_id}/status, and /contacts/bulk-status change only
+the enabled field, not verified consent, memberships, or history. The
+Contacts page retains advanced messaging-permission controls behind a
+disclosure; group or username membership alone is not assumed to be
+permission. Existing sending eligibility still requires enabled=1 AND
+consent=1 AND archived=0, so activating imported nonconsenting contacts
+does not automatically make them messageable.
+
 ## Bulk contact consent and bulk soft removal (2026-11-22)
 
 Requested: grant/withdraw consent for multiple selected contacts or all
