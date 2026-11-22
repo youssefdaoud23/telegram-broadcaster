@@ -7,6 +7,7 @@ OLD=/root/n8n/telegram-broadcaster
 NEW=/opt/telegram-broadcaster
 STOPPED=0
 MOVED=0
+BACKUP_NAME=""
 
 say() { printf '[telegram-broadcaster] %s\n' "$*"; }
 fail() { say "ERROR: $*" >&2; exit 1; }
@@ -17,16 +18,22 @@ rollback() {
     return
   fi
   trap - EXIT
+  if [[ "$STOPPED" == 0 && "$MOVED" == 0 ]]; then
+    say "Migration aborted before service shutdown. Original service remains running." >&2
+    exit "$status"
+  fi
   say "Migration failed (exit $status). Attempting to restore the original directory and service." >&2
   if [[ "$MOVED" == 1 && -d "$NEW" && ! -e "$OLD" ]]; then
     docker compose -f "$NEW/compose.yaml" stop broadcaster >/dev/null 2>&1 || true
-    mv -- "$NEW" "$OLD" || say "CRITICAL: Move back failed; investigate the directories before retrying." >&2
+    mv -T -- "$NEW" "$OLD" || say "CRITICAL: Move back failed; investigate the directories before retrying." >&2
   fi
   if [[ "$STOPPED" == 1 && -f "$OLD/compose.yaml" ]]; then
     docker compose -f "$OLD/compose.yaml" up -d --no-build --force-recreate broadcaster \
       || say "CRITICAL: Automatic service recovery failed; inspect Docker status." >&2
   fi
-  say "A verified pre-migration database backup remains in data/." >&2
+  if [[ -n "$BACKUP_NAME" ]]; then
+    say "A verified pre-migration database backup remains in data/: $BACKUP_NAME" >&2
+  fi
   exit "$status"
 }
 trap rollback EXIT
@@ -128,14 +135,43 @@ PY
 [[ "$backup_name" == broadcaster.pre-opt-migration-*.sqlite3 ]] \
   || fail "Unexpected backup filename returned; stopping."
 [[ -f "$OLD/data/$backup_name" ]] || fail "Backup file missing after copy."
+BACKUP_NAME="$backup_name"
 say "Verified database backup: data/$backup_name"
 
 say "Stopping only the broadcaster service."
-docker compose -f "$OLD/compose.yaml" stop broadcaster
+# Record that shutdown may have started before invoking Docker. If the stop
+# command itself fails after partially stopping the container, recover it.
 STOPPED=1
+docker compose -f "$OLD/compose.yaml" stop broadcaster
+
+# The image build and graceful shutdown may have taken time. Check the exact
+# stopped database before moving; a new queued/sending campaign or changed
+# record counts will abort the move and restart the original service.
+stopped_counts="$(python3 - "$OLD/data/broadcaster.sqlite3" <<'PY'
+import json
+import sqlite3
+import sys
+
+path = sys.argv[1]
+db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+try:
+    busy = db.execute(
+        "SELECT COUNT(*) FROM campaigns WHERE state IN ('queued', 'sending')"
+    ).fetchone()[0]
+    if busy:
+        sys.exit(f"{busy} campaigns were active during shutdown. Do not move.")
+    tables = ("admins", "accounts", "contacts", "campaigns", "deliveries")
+    counts = {name: db.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0]
+              for name in tables}
+    print(json.dumps(counts, sort_keys=True, separators=(",", ":")))
+finally:
+    db.close()
+PY
+)"
+[[ "$stopped_counts" == "$before_counts" ]]   || fail "Records changed between the backup and shutdown; review before moving."
 
 say "Moving the complete project directory (including .env, data and Git history)."
-mv -- "$OLD" "$NEW"
+mv -T -- "$OLD" "$NEW"
 MOVED=1
 
 [[ "$(sha256sum "$NEW/.env" | cut -d' ' -f1)" == "$env_checksum" ]] \

@@ -25,7 +25,7 @@ class MigrationScriptTests(unittest.TestCase):
             "trap rollback EXIT",
             'read_counts "$OLD"',
             'docker compose -f "$OLD/compose.yaml" stop broadcaster',
-            'mv -- "$OLD" "$NEW"',
+            'mv -T -- "$OLD" "$NEW"',
             'docker compose -f "$NEW/compose.yaml" up -d --no-build --force-recreate broadcaster',
             "PRAGMA integrity_check",
             "db.backup(copy)",
