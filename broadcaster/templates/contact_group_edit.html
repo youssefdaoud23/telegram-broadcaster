@@ -4,7 +4,7 @@
   <div><a class="back-link" href="/contacts/groups">← All contact groups</a>
     <span class="eyebrow accent">CONTACT GROUP</span>
     <h1>{{ group['name'] }}</h1>
-    <p class="subtle">This editor lists all contacts in your workspace, not just this group. Only checked contacts are members. Saving replaces this group's membership; consent and enabled status are unchanged.</p></div>
+    <p class="subtle">This editor lists all contacts in your workspace, not just this group. Only checked contacts are members. Saving replaces this group's membership. Use the Active switches to control availability separately.</p></div>
   <a class="btn btn-primary" href="/compose?group_id={{ group['id'] }}">Broadcast to this group</a>
 </div>
 <div class="contacts-grid">
@@ -15,19 +15,30 @@
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <div class="group-member-toolbar">
         <label class="checkline"><input id="group-member-select-all" type="checkbox"> Select all shown</label>
-        <input id="group-member-search" type="search" placeholder="Search contacts..." aria-label="Filter contacts">
+        <input id="group-member-search" type="search" placeholder="Search names, usernames, phones, Telegram IDs..." aria-label="Filter contacts">
       </div>
       <div class="group-member-scroll">
       {% for contact in contacts %}
-      <label class="group-member-row" data-group-member-search="{{ (contact['name'] ~ ' ' ~ contact['username'] ~ ' ' ~ contact['phone'])|lower }}">
+      <div class="group-member-row" data-group-member-search="{{ (contact['name'] ~ ' ' ~ contact['username'] ~ ' ' ~ contact['phone'] ~ ' ' ~ contact['user_id'] ~ ' ' ~ contact['notes'])|lower }}">
         <input class="group-member-checkbox" type="checkbox" name="contacts" value="{{ contact['id'] }}"
+          aria-label="Include {{ contact['name'] }} in this group"
           {% if contact['id'] in members %}checked{% endif %}>
         <span class="contact-avatar">{{ contact['name'][:1]|upper }}</span>
-        <span class="group-member-contact"><strong>{{ contact['name'] }}</strong>
-          <small>{{ contact['username'] or contact['phone'] or contact['user_id'] }}</small></span>
-        {% if not contact['enabled'] %}<span class="status status-muted">Disabled</span>
-        {% elif not contact['consent'] %}<span class="status status-pending">No consent</span>{% endif %}
-      </label>
+        <span class="group-member-contact">
+          <strong>{{ contact['name'] }}</strong>
+          <small>{% if contact['username'] %}Username: @{{ contact['username'].lstrip('@') }}{% else %}Username: Not available{% endif %}</small>
+          <small>Phone: <span class="contact-phone">{{ contact['phone'] or 'Not available' }}</span></small>
+          {% if contact['user_id'] %}<small>Telegram ID: {{ contact['user_id'] }}</small>{% endif %}
+        </span>
+        <button type="submit" form="group-active-form"
+                formaction="/contacts/{{ contact['id'] }}/status"
+                name="action" value="{{ 'deactivate' if contact['enabled'] else 'activate' }}"
+                class="contact-status-switch {{ 'is-active' if contact['enabled'] else 'is-inactive' }}"
+                aria-label="{{ 'Deactivate' if contact['enabled'] else 'Activate' }} {{ contact['name'] }}">
+          <span class="contact-status-switch-track" aria-hidden="true"><span></span></span>
+          <span>{{ 'Active' if contact['enabled'] else 'Inactive' }}</span>
+        </button>
+      </div>
       {% else %}<div class="empty-state"><p>No contacts yet. <a href="/contacts">Add contacts</a> first.</p></div>
       {% endfor %}
       </div>
@@ -37,25 +48,16 @@
   </section>
   <div class="side-stack">
     <section class="panel">
-      <div class="panel-head"><h2>Consent for the entire group</h2></div>
-      <p class="subtle">Apply to all {{ members|length }} current members of this group. Consent belongs to each contact across ALL groups: withdrawing it here also affects their other groups. Group membership alone does not establish permission.</p>
-      <form method="post" action="/contacts/bulk-consent" class="stack-form compact">
+      <div class="panel-head"><h2>Group Active status</h2></div>
+      <p class="subtle">Set the Active switch for every current member of this group. This also affects those contacts in other groups. It does not change messaging permission.</p>
+      <form id="group-active-form" method="post" action="/contacts/groups/{{ group['id'] }}/status" class="stack-form compact">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <input type="hidden" name="scope" value="group">
         <input type="hidden" name="group_id" value="{{ group['id'] }}">
-        <label for="group-consent-evidence">Evidence or source of permission</label>
-        <textarea id="group-consent-evidence" name="evidence" rows="2" maxlength="500"
-          placeholder="e.g. Each member signed up to receive messages"></textarea>
-        <label class="checkline consent-attestation"><input type="checkbox" name="verified" value="yes">
-          I have verified permission from every member of this group.</label>
-        <button class="btn btn-primary" type="submit" name="action" value="grant"
-          data-confirm="Record verified opt-in for ALL active members of this group? Only proceed if each one explicitly agreed.">
-          Record verified opt-in for whole group</button>
-        <button class="btn btn-outline" type="submit" name="action" value="withdraw"
-          data-confirm="Withdraw consent for ALL active members of this group? These contacts may also belong to other groups.">
-          Withdraw consent for whole group</button>
+        <button type="submit" class="btn btn-primary" name="action" value="activate"
+          data-confirm="Set all current members of this group Active? Their messaging permissions stay unchanged.">Set entire group Active</button>
+        <button type="submit" class="btn btn-outline" name="action" value="deactivate"
+          data-confirm="Set all current members of this group Inactive? These contacts may belong to other groups.">Set entire group Inactive</button>
       </form>
-      <p class="subtle"><a href="/contacts/consent-history">Review consent history</a></p>
     </section>
     <section class="panel"><div class="panel-head"><h2>Rename group</h2></div>
       <form action="/contacts/groups/{{ group['id'] }}/rename" method="post" class="stack-form">
@@ -65,7 +67,7 @@
         <button type="submit" class="btn btn-secondary">Rename group</button>
       </form>
     </section>
-    <div class="info-strip"><span>ⓘ</span><p>You can assign the same contact to several groups. Saving this membership list will not contact anyone. The broadcaster filters out disabled or non-consenting contacts when selecting recipients.</p></div>
+    <div class="info-strip"><span>ⓘ</span><p>You can assign the same contact to several groups. Saving this membership list will not contact anyone. Active status determines whether a contact is available for selection; broadcasts also require valid messaging permission.</p></div>
   </div>
 </div>
 {% endblock %}
