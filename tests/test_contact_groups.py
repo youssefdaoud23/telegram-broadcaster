@@ -141,7 +141,12 @@ class ContactGroupsTests(unittest.TestCase):
         contact_page=self.http.get(f"/contacts?group_id={b}")
         self.assertIn("Alice Updated",contact_page.text)
         self.assertIn("Group of seven",contact_page.text)
-        self.assertEqual(self.http.get(f"/contacts?group_id={a}").text.count("Alice Updated"),0)
+        # Client-side filters keep the full owner-scoped contact dataset in
+        # the DOM so changing groups does not require a server round trip.
+        other_view=self.http.get(f"/contacts?group_id={a}")
+        self.assertIn("Alice Updated",other_view.text)
+        self.assertIn(f'<option value="{a}" selected>',other_view.text)
+        self.assertIn('data-contact-groups="|'+str(b)+'|"',other_view.text)
 
     def test_group_editor_can_bulk_assign_and_keep_nonconsenting_members(self):
         group=self.add_group("Special audience")
@@ -153,7 +158,9 @@ class ContactGroupsTests(unittest.TestCase):
         self.assertEqual(response.status_code,303)
         page=self.http.get(f"/contacts/groups/{group}")
         self.assertIn("2 selected",page.text)
-        self.assertIn("No consent",page.text)
+        self.assertIn("Group Active status",page.text)
+        self.assertNotIn("Consent for the entire group",page.text)
+        self.assertIn("Phone: ",page.text)
         with core.database() as db:
             record=core.contact_groups(db,self.owner_id)[0]
             self.assertEqual(record["total"],2)
