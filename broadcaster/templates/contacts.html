@@ -1,13 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page-heading"><div><span class="eyebrow accent">AUDIENCE DATABASE</span><h1>Your contacts</h1><p class="subtle">Organize contacts into multiple groups and target eligible recipients separately.</p></div>
-<div class="history-actions"><a class="btn btn-secondary" href="/contacts/groups">Manage groups</a><a class="btn btn-outline" href="/contacts/consent-history">Consent history</a><a class="btn btn-outline" href="/contacts/export">↓ Export CSV</a></div></div>
-<div class="contacts-grid">
-  <section class="panel"><div class="panel-head"><h2>Contact list <span class="count-pill">{{ contacts|length }}</span></h2></div>
-    <form class="search-row" action="/contacts" method="get"><input name="q" value="{{ query }}" placeholder="Search by name, username, or phone...">
-      <select name="group_id" aria-label="Filter contacts by group">
-        <option value="0">All contact groups</option>{% for group in groups %}<option value="{{ group['id'] }}" {% if group_id==group['id'] %}selected{% endif %}>{{ group['name'] }} ({{ group['total'] }})</option>{% endfor %}
-      </select><button class="btn btn-secondary">Filter</button></form>
+<div class="page-heading"><div><span class="eyebrow accent">AUDIENCE DATABASE</span><h1>Your contacts</h1><p class="subtle">Search and manage imported contacts, group assignments and active status in one place.</p></div>
+<div class="history-actions"><a class="btn btn-secondary" href="/contacts/groups">Manage groups</a><a class="btn btn-outline" href="/contacts/export">↓ Export CSV</a></div></div>
+<div class="contacts-grid contacts-grid-wide">
+  <section class="panel"><div class="panel-head"><h2>Contact list <span class="count-pill">{{ contacts|length }}</span></h2><span id="contact-filter-count" class="subtle" role="status" aria-live="polite">{{ contacts|length }} shown</span></div>
+    <form class="search-row contact-filter-bar" action="/contacts" method="get" role="search">
+      <div class="contact-filter-field">
+        <label for="contacts-filter-search">Search contacts</label>
+        <input id="contacts-filter-search" name="q" type="search" value="{{ query }}"
+          autocomplete="off" placeholder="Name, username, phone, Telegram ID, notes, group..."
+          aria-label="Search all imported contact details">
+      </div>
+      <div class="contact-filter-field">
+        <label for="contacts-filter-group">Contact group</label>
+        <select id="contacts-filter-group" name="group_id" aria-label="Filter contacts by group">
+          <option value="0">All contact groups</option>
+          {% for group in groups %}<option value="{{ group['id'] }}" {% if group_id==group['id'] %}selected{% endif %}>{{ group['name'] }} ({{ group['total'] }})</option>{% endfor %}
+        </select>
+      </div>
+      <button type="submit" id="contacts-filter-submit" class="btn btn-secondary">Filter</button>
+    </form>
+    <p class="subtle contact-filter-hint">Results update as you type or choose a group. Changing filters deselects contacts that are no longer shown.</p>
     {% if contacts %}
     {% if groups %}
     <form id="bulk-contact-group-form" method="post" action="/contacts/bulk-group" class="contacts-bulk-form">
@@ -25,6 +38,15 @@
     {% endif %}
     <div class="contacts-bulk-action-area">
       {% if not groups %}<div class="contact-bulk-count" id="bulk-contact-count">0 selected</div>{% endif %}
+      <form id="bulk-status-form" data-bulk-selected method="post" action="/contacts/bulk-status" class="contacts-bulk-form contacts-active-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <strong>Selected contacts</strong>
+        <button class="btn btn-primary" type="submit" name="action" value="activate">Set Active</button>
+        <button class="btn btn-secondary" type="submit" name="action" value="deactivate">Set Inactive</button>
+      </form>
+      <details class="advanced-permission-tools">
+        <summary>Advanced messaging permission controls</summary>
+        <p class="subtle">Active status does not replace independently verified permission for private broadcasts.</p>
       <form id="bulk-consent-form" data-bulk-selected method="post" action="/contacts/bulk-consent" class="contacts-bulk-form bulk-consent-form">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="scope" value="selected">
@@ -44,6 +66,9 @@
             Withdraw consent</button>
         </div>
       </form>
+
+        <p><a class="text-link" href="/contacts/consent-history">View permission history</a></p>
+      </details>
       <form id="bulk-remove-form" data-bulk-selected method="post" action="/contacts/bulk-remove" class="contacts-bulk-form">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <strong>Remove selected contacts</strong>
@@ -55,21 +80,48 @@
       </form>
     </div>
     {% endif %}
-    <div class="table-scroll"><table class="contacts-table"><thead><tr>
-    <th>{% if contacts %}<input type="checkbox" id="bulk-select-all" aria-label="Select all visible contacts">{% endif %}</th>
-    <th>Contact</th><th>Telegram identifier</th><th>Groups</th><th>Eligibility</th><th></th></tr></thead><tbody>
-    {% for c in contacts %}
-    <tr><td><input type="checkbox" name="contacts" value="{{ c['id'] }}" {% if groups %}form="bulk-contact-group-form"{% endif %} class="bulk-contact-checkbox" aria-label="Select {{ c['name'] }}"></td>
-    <td><div class="person-cell"><span class="contact-avatar">{{ c['name'][:1]|upper }}</span><div><a class="table-primary" href="/contacts/{{ c['id'] }}/edit">{{ c['name'] }}</a><div class="table-secondary">{{ c['notes'][:60] or '-' }}</div></div></div></td>
-    <td><span class="mono">{{ c['username'] or c['phone'] or c['user_id'] }}</span></td>
-    <td><div class="contact-group-tags">{% for g in groups %}{% if g['id'] in membership.get(c['id'], []) %}
-      <a class="contact-group-tag" href="/contacts?group_id={{ g['id'] }}">{{ g['name'] }}</a>{% endif %}{% endfor %}
-      {% if not membership.get(c['id']) %}<span class="subtle">Unassigned</span>{% endif %}</div></td>
-    <td>{% if not c['enabled'] %}<span class="status status-muted">Disabled</span>{% elif c['consent'] %}<span class="status status-connected">Opted in</span>{% else %}<span class="status status-pending">No consent</span>{% endif %}</td>
-    <td class="actions-cell"><a class="icon-button" title="Edit" href="/contacts/{{ c['id'] }}/edit">Edit</a>
-    <form method="post" action="/contacts/{{ c['id'] }}/remove" class="inline-form" data-confirm="Remove this contact from active recipients?"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="icon-button danger-text">Remove</button></form></td></tr>
-    {% else %}<tr><td colspan="6"><div class="empty-state"><span class="empty-icon">♧</span><h3>No contacts found</h3><p>Add one using the form, or import your existing list.</p></div></td></tr>{% endfor %}
-    </tbody></table></div>
+    <div class="table-scroll contact-table-scroll"><table class="contacts-table" id="contacts-results-table">
+      <thead><tr>
+        <th>{% if contacts %}<input type="checkbox" id="bulk-select-all" aria-label="Select all filtered contacts">{% endif %}</th>
+        <th>Contact</th><th>Telegram username</th><th>Phone number</th><th>Telegram ID</th><th>Groups</th><th>Active</th><th>Actions</th>
+      </tr></thead>
+      <tbody>
+      {% for c in contacts %}
+      <tr class="contact-filter-row"
+          data-contact-search="{{ (c['name'] ~ ' ' ~ c['username'] ~ ' ' ~ c['phone'] ~ ' ' ~ c['user_id'] ~ ' ' ~ c['notes'])|lower }}"
+          data-contact-groups="|{% for g in groups %}{% if g['id'] in membership.get(c['id'], []) %}{{ g['id'] }}|{% endif %}{% endfor %}">
+        <td><input type="checkbox" name="contacts" value="{{ c['id'] }}" {% if groups %}form="bulk-contact-group-form"{% endif %} class="bulk-contact-checkbox" aria-label="Select {{ c['name'] }}"></td>
+        <td><div class="person-cell"><span class="contact-avatar">{{ c['name'][:1]|upper }}</span><div><a class="table-primary" href="/contacts/{{ c['id'] }}/edit">{{ c['name'] }}</a>
+          {% if c['notes'] %}<div class="table-secondary" title="{{ c['notes'] }}">{{ c['notes'][:60] }}</div>{% endif %}
+        </div></div></td>
+        <td><span class="mono">{{ ('@' ~ c['username'].lstrip('@')) if c['username'] else '—' }}</span></td>
+        <td><span class="mono contact-phone">{{ c['phone'] or 'Not available' }}</span></td>
+        <td><span class="mono">{{ c['user_id'] or '—' }}</span></td>
+        <td><div class="contact-group-tags">{% for g in groups %}{% if g['id'] in membership.get(c['id'], []) %}
+          <a class="contact-group-tag" href="/contacts?group_id={{ g['id'] }}">{{ g['name'] }}</a>{% endif %}{% endfor %}
+          {% if not membership.get(c['id']) %}<span class="subtle">Unassigned</span>{% endif %}</div></td>
+        <td><form method="post" action="/contacts/{{ c['id'] }}/status" class="inline-form">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button type="submit" class="contact-status-switch {{ 'is-active' if c['enabled'] else 'is-inactive' }}"
+                  name="action" value="{{ 'deactivate' if c['enabled'] else 'activate' }}"
+                  aria-label="{{ 'Deactivate' if c['enabled'] else 'Activate' }} {{ c['name'] }}"
+                  title="Change active status; messaging permission is separate">
+            <span class="contact-status-switch-track" aria-hidden="true"><span></span></span>
+            <span>{{ 'Active' if c['enabled'] else 'Inactive' }}</span>
+          </button>
+        </form></td>
+        <td class="actions-cell"><a class="icon-button" title="Edit contact" href="/contacts/{{ c['id'] }}/edit">Edit</a>
+          <form method="post" action="/contacts/{{ c['id'] }}/remove" class="inline-form" data-confirm="Remove this contact from active recipients?">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="icon-button danger-text">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8"><div class="empty-state"><h3>No contacts yet</h3><p>Add someone using the form below or import an existing list.</p></div></td></tr>
+      {% endfor %}
+      <tr id="contacts-filter-empty" hidden><td colspan="8"><div class="empty-state"><h3>No matching contacts</h3><p>Try another name, username, phone, ID, or group.</p></div></td></tr>
+      </tbody>
+    </table></div>
   </section>
   <div class="side-stack">
     <section class="panel"><div class="panel-head"><div><h2>Add contact</h2><p class="subtle">Username, phone, or user ID.</p></div></div>
