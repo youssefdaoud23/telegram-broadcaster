@@ -148,8 +148,8 @@ def create_admin(username: str, password: str) -> None:
     username = username.strip()
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{2,39}", username):
         raise ValueError("Administrator username must be 3–40 characters")
-    if len(password) < 14 or len(password) > 256:
-        raise ValueError("Administrator password must be between 14 and 256 characters")
+    if not password:
+        raise ValueError("Administrator password cannot be empty")
     init_db()
     salt = secrets.token_bytes(16)
     with database() as db:

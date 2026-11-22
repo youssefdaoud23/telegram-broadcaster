@@ -63,6 +63,17 @@ class WebsiteTests(unittest.TestCase):
         bad=self.testclient.post("/contacts",data={"csrf":"incorrect","name":"Never","username":"@neveraccount"},follow_redirects=False)
         self.assertEqual(bad.status_code,403)
 
+    def test_short_and_long_password_login(self):
+        for username, password in (("short-user", "a"), ("long-user", "Q" * 600)):
+            core.create_admin(username, password)
+            response = self.testclient.post(
+                "/login", data={"username": username, "password": password},
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            self.assertEqual(response.headers["location"], "/")
+            self.assertEqual(self.testclient.get("/").status_code, 200)
+
     def test_add_contact_and_import(self):
         csrf=self.sign_in()
         response=self.testclient.post("/contacts",data={

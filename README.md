@@ -55,7 +55,7 @@ PY
    docker compose run --rm -it broadcaster python -m broadcaster.cli create-admin
    ~~~
 
-   Use a unique administrator username and a strong password of at least 14 characters. The password is hidden while you type and saved as a memory-hard password hash.
+   Use a unique administrator username and any non-empty password you choose. A strong, unique password is recommended. The password is hidden while you type and saved as a memory-hard password hash.
 
 4. Start the website and check the container:
 

@@ -111,7 +111,7 @@ def login_page(request: Request):
 @app.post("/login")
 def login_action(request: Request, username: str = Form(""), password: str = Form("")):
     name = username.strip().lower()[:80]
-    if not name or len(password) > 500:
+    if not name or not password:
         return redirect("/login", "Check your username and password.")
     with core.database() as db:
         if core.login_locked(db, name):

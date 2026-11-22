@@ -16,7 +16,7 @@ def main():
     print("Create administrator. Password is never displayed or saved in plaintext.")
     try:
         username=input("Admin username: ").strip()
-        password=getpass.getpass("Strong password (14+ characters): ")
+        password=getpass.getpass("Administrator password (any non-empty length): ")
         repeated=getpass.getpass("Repeat password: ")
         if password != repeated:
             raise ValueError("Passwords do not match")

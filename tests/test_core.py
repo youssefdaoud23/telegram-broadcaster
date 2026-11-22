@@ -40,6 +40,17 @@ class PersistenceTests(unittest.TestCase):
             db.commit()
             self.assertIsNone(core.session(db,session))
 
+    def test_administrator_password_has_no_length_policy(self):
+        passwords = ("x", "1234", "z" * 300)
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            core.create_admin("empty-pass", "")
+        for index, password in enumerate(passwords):
+            core.create_admin(f"custom{index}", password)
+            with core.database() as db:
+                admin = db.execute("SELECT * FROM admins WHERE username=?", (f"custom{index}",)).fetchone()
+                self.assertTrue(core.validate_password(admin, password))
+                self.assertFalse(core.validate_password(admin, password + "wrong"))
+
     def test_contact_normalization_and_opt_in_default(self):
         entry=core.normalize_contact(" Alice ","Alice_12345","","","intro")
         self.assertEqual(entry["username"],"@alice_12345")
