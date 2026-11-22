@@ -7,6 +7,12 @@
 <label>Telegram username</label><input name="username" value="{{ contact['username'] }}" placeholder="@username">
 <div class="input-grid"><div><label>Phone</label><input name="phone" value="{{ contact['phone'] }}"></div><div><label>Telegram user ID</label><input name="user_id" value="{{ contact['user_id'] }}"></div></div>
 <label>Notes</label><textarea rows="3" name="notes" maxlength="1000">{{ contact['notes'] }}</textarea>
+<fieldset class="contact-group-fieldset"><legend>Contact groups (select multiple)</legend>
+  {% for group in groups %}
+    <label class="checkline"><input type="checkbox" name="group_ids" value="{{ group['id'] }}"
+      {% if group['id'] in assigned_groups %}checked{% endif %}> {{ group['name'] }}</label>
+  {% else %}<p class="subtle">No groups yet. <a href="/contacts/groups">Create one</a> first.</p>{% endfor %}
+</fieldset>
 <label class="checkline"><input type="checkbox" name="enabled" value="yes" {% if contact['enabled'] %}checked{% endif %}> Active contact</label>
 <label class="checkline"><input type="checkbox" name="consent" value="yes" {% if contact['consent'] %}checked{% endif %}> Agreed to receive private messages</label>
 <div class="form-actions"><button class="btn btn-primary">Save contact</button><a href="/contacts" class="btn btn-outline">Cancel</a></div>

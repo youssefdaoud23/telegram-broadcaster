@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading">
+  <div><a href="/contacts" class="back-link">← Back to contacts</a>
+    <span class="eyebrow accent">CONTACT ORGANIZATION</span>
+    <h1>Your contact groups</h1>
+    <p class="subtle">Organize contacts into private groups. A contact can belong to multiple groups.</p>
+  </div>
+</div>
+<div class="contacts-grid">
+  <section class="panel">
+    <div class="panel-head"><h2>Groups <span class="count-pill">{{ groups|length }}</span></h2></div>
+    {% if groups %}
+    <div class="contact-group-list">
+      {% for group in groups %}
+      <div class="contact-group-entry">
+        <div class="contact-group-details">
+          <span class="contact-group-icon" aria-hidden="true">◈</span>
+          <div><a class="table-primary" href="/contacts/groups/{{ group['id'] }}">{{ group['name'] }}</a>
+            <div class="table-secondary">{{ group['total'] }} contacts - {{ group['eligible'] }} eligible for broadcast</div></div>
+        </div>
+        <div class="contact-group-actions">
+          <a class="btn btn-secondary" href="/contacts/groups/{{ group['id'] }}">Manage</a>
+          <a class="btn btn-outline" href="/compose?group_id={{ group['id'] }}">Broadcast</a>
+          <form action="/contacts/groups/{{ group['id'] }}/delete" method="post" class="inline-form"
+            data-confirm="Delete group {{ group['name'] }}? Contacts and existing broadcasts will be preserved.">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button type="submit" class="btn btn-outline danger-text">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+      <div class="empty-state"><h3>No contact groups yet</h3>
+        <p>Create your first group and assign contacts. Existing contacts will be preserved.</p></div>
+    {% endif %}
+  </section>
+  <div class="side-stack">
+    <section class="panel">
+      <div class="panel-head"><h2>Create group</h2></div>
+      <form action="/contacts/groups" method="post" class="stack-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label for="new-group-name">Group name</label>
+        <input id="new-group-name" name="name" maxlength="64" required placeholder="e.g. Customers - Prague">
+        <button type="submit" class="btn btn-primary">Create contact group</button>
+      </form>
+    </section>
+    <div class="info-strip"><span>ⓘ</span><p>Contact groups are not Telegram chats. When you select a group for broadcasting, each eligible contact receives an individual private message. Being in a group does not grant messaging consent.</p></div>
+  </div>
+</div>
+{% endblock %}

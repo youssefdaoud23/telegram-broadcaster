@@ -531,3 +531,47 @@ label { color: var(--tg-text); }
 .group-member-table { min-width: 560px; }
 .group-member-table td { overflow-wrap: anywhere; }
 .group-member-table td:last-child { font-family: ui-monospace, Consolas, monospace; }
+
+
+/* Contact groups: one contact may be in several private groups. */
+.contact-group-list { display:flex; flex-direction:column; gap:10px; }
+.contact-group-entry { display:flex; align-items:center; justify-content:space-between; gap:15px;
+  padding:14px; border:1px solid var(--tg-outline); border-radius:13px; background:var(--tg-surface-alt); }
+.contact-group-details { display:flex; align-items:center; gap:12px; min-width:0; }
+.contact-group-details>div { min-width:0; }
+.contact-group-icon { display:grid; place-items:center; border-radius:12px; width:40px; height:40px;
+  flex-shrink:0; font-size:20px; color:var(--blue); background:var(--tg-selected); }
+.contact-group-actions { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
+.contact-group-actions .btn { font-size:11px; padding:7px 11px; }
+.contact-group-tags { display:flex; flex-wrap:wrap; gap:5px; min-width:100px; }
+.contact-group-tag { display:inline-block; padding:4px 8px; background:var(--tg-selected); color:var(--blue);
+  border-radius:9px; font-size:11px; font-weight:650; overflow-wrap:anywhere; }
+.contact-group-fieldset { padding:12px; margin:12px 0; display:flex; flex-direction:column;
+  gap:8px; border-radius:12px; border:1px solid var(--tg-outline); max-height:230px; overflow:auto; }
+.contact-group-fieldset legend { padding:0 7px; font-weight:650; color:var(--tg-text); font-size:12px; }
+.group-member-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:15px; margin-bottom:12px; }
+.group-member-toolbar input[type=search] { flex:1; min-width:180px; }
+.group-member-scroll { overflow:auto; max-height:515px; display:flex; flex-direction:column; gap:7px; }
+.group-member-row { display:flex; align-items:center; padding:11px 13px; gap:12px; border:1px solid var(--tg-outline);
+  border-radius:12px; background:var(--tg-surface-alt); cursor:pointer; }
+.group-member-row[hidden] { display:none; }
+.group-member-row input[type=checkbox] { width:17px; height:17px; flex:0 0 17px; }
+.group-member-contact { flex:1; min-width:0; display:flex; flex-direction:column; overflow-wrap:anywhere; }
+.group-member-contact small { color:var(--tg-muted); font-size:11px; }
+.broadcast-group-picker { display:flex; flex-direction:column; gap:10px; margin:13px 0;
+  border:1px solid var(--tg-outline); padding:13px; border-radius:13px; background:var(--tg-surface-alt); }
+.broadcast-group-picker-head { display:flex; flex-direction:column; gap:3px; }
+.broadcast-group-picker-head strong { font-size:12px; }
+.broadcast-group-options { display:flex; flex-wrap:wrap; gap:7px; max-height:180px; overflow:auto; }
+.broadcast-group-option { display:inline-flex; align-items:center; gap:7px; padding:8px 10px; cursor:pointer;
+  border-radius:10px; background:var(--tg-surface); border:1px solid var(--tg-outline);
+  max-width:100%; overflow-wrap:anywhere; }
+.broadcast-group-option:has(input:checked) { border-color:var(--blue); background:var(--tg-selected); }
+.broadcast-group-option input { width:16px; height:16px; flex:0 0 16px; }
+.broadcast-group-option small { color:var(--tg-muted); font-size:10px; white-space:nowrap; }
+.broadcast-group-picker p { font-size:11px; }
+@media (max-width:790px) {
+  .contact-group-entry { flex-wrap:wrap; }
+  .contact-group-actions { width:100%; }
+  .group-member-row { gap:8px; }
+}

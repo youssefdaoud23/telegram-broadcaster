@@ -98,6 +98,40 @@ CREATE TABLE IF NOT EXISTS contacts (
  updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_archived ON contacts(archived,enabled,consent);
+CREATE TABLE IF NOT EXISTS contact_groups (
+ id INTEGER PRIMARY KEY,
+ owner_id INTEGER NOT NULL REFERENCES admins(id),
+ name TEXT NOT NULL COLLATE NOCASE,
+ created_at INTEGER NOT NULL,
+ updated_at INTEGER NOT NULL,
+ UNIQUE(owner_id,name)
+);
+CREATE INDEX IF NOT EXISTS idx_contact_groups_owner ON contact_groups(owner_id);
+CREATE TABLE IF NOT EXISTS contact_group_members (
+ group_id INTEGER NOT NULL REFERENCES contact_groups(id) ON DELETE CASCADE,
+ contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+ added_at INTEGER NOT NULL,
+ PRIMARY KEY(group_id,contact_id)
+);
+CREATE INDEX IF NOT EXISTS idx_contact_group_members_contact ON contact_group_members(contact_id);
+CREATE TRIGGER IF NOT EXISTS trg_group_member_owner_insert
+BEFORE INSERT ON contact_group_members
+BEGIN
+ SELECT CASE WHEN NOT EXISTS (
+   SELECT 1 FROM contact_groups g JOIN contacts c
+   ON c.owner_id=g.owner_id
+   WHERE g.id=NEW.group_id AND c.id=NEW.contact_id
+ ) THEN RAISE(ABORT,'Contact and group owners must match') END;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_group_member_owner_update
+BEFORE UPDATE OF group_id,contact_id ON contact_group_members
+BEGIN
+ SELECT CASE WHEN NOT EXISTS (
+   SELECT 1 FROM contact_groups g JOIN contacts c
+   ON c.owner_id=g.owner_id
+   WHERE g.id=NEW.group_id AND c.id=NEW.contact_id
+ ) THEN RAISE(ABORT,'Contact and group owners must match') END;
+END;
 CREATE TABLE IF NOT EXISTS campaigns (
  id TEXT PRIMARY KEY,
  account_id TEXT NOT NULL REFERENCES accounts(id),
@@ -387,6 +421,139 @@ def active_contact_rows(db: sqlite3.Connection, owner_id: int) -> list[sqlite3.R
         "SELECT * FROM contacts WHERE owner_id=? AND archived=0 ORDER BY name COLLATE NOCASE,id",
         (owner_id,),
     ).fetchall()
+
+
+def validate_group_name(name: str) -> str:
+    name = " ".join(str(name).strip().split())
+    if not 1 <= len(name) <= 64:
+        raise ValueError("Group name must be between 1 and 64 characters")
+    if any(c in name for c in (";", "|", "\\", "\0")):
+        raise ValueError("Group names cannot contain semicolons or vertical bars")
+    return name
+
+
+def contact_groups(db: sqlite3.Connection, owner_id: int) -> list[sqlite3.Row]:
+    return db.execute("""
+        SELECT g.id,g.name,g.created_at,
+          SUM(CASE WHEN c.archived=0 THEN 1 ELSE 0 END) AS total,
+          SUM(CASE WHEN c.archived=0 AND c.enabled=1 AND c.consent=1 THEN 1 ELSE 0 END) AS eligible
+        FROM contact_groups g
+        LEFT JOIN contact_group_members m ON m.group_id=g.id
+        LEFT JOIN contacts c ON c.id=m.contact_id AND c.owner_id=g.owner_id
+        WHERE g.owner_id=?
+        GROUP BY g.id
+        ORDER BY g.name COLLATE NOCASE,g.id
+    """, (owner_id,)).fetchall()
+
+
+def contact_group_map(db: sqlite3.Connection, owner_id: int) -> dict[int,set[int]]:
+    result: dict[int,set[int]] = {}
+    for row in db.execute("""
+        SELECT m.contact_id,m.group_id
+        FROM contact_group_members m
+        JOIN contact_groups g ON g.id=m.group_id
+        JOIN contacts c ON c.id=m.contact_id AND c.owner_id=g.owner_id
+        WHERE g.owner_id=?
+    """, (owner_id,)):
+        result.setdefault(row["contact_id"],set()).add(row["group_id"])
+    return result
+
+
+def add_contact_group(db: sqlite3.Connection, owner_id: int, name: str) -> int:
+    name=validate_group_name(name)
+    try:
+        row=db.execute(
+            "INSERT INTO contact_groups(owner_id,name,created_at,updated_at) VALUES (?,?,?,?)",
+            (owner_id,name,now(),now()),
+        )
+    except sqlite3.IntegrityError as exc:
+        raise ValueError("A group with this name already exists in your workspace") from exc
+    return int(row.lastrowid)
+
+
+def update_contact_group(db: sqlite3.Connection, owner_id: int,
+                         group_id: int, name: str) -> None:
+    name=validate_group_name(name)
+    try:
+        updated=db.execute(
+            "UPDATE contact_groups SET name=?,updated_at=? WHERE id=? AND owner_id=?",
+            (name,now(),group_id,owner_id),
+        )
+    except sqlite3.IntegrityError as exc:
+        raise ValueError("A group with this name already exists in your workspace") from exc
+    if not updated.rowcount:
+        raise ValueError("Group not found in your workspace")
+
+
+def _allowed_group_ids(db: sqlite3.Connection, owner_id: int,
+                       group_ids: list[int]) -> set[int]:
+    if len(group_ids)>100:
+        raise ValueError("Select no more than 100 groups at once")
+    if len(group_ids)!=len(set(group_ids)):
+        raise ValueError("Duplicate group selection")
+    if any(not isinstance(g,int) or g<=0 for g in group_ids):
+        raise ValueError("Invalid group selected")
+    if not group_ids:
+        return set()
+    placeholders=",".join("?" for _ in group_ids)
+    allowed={
+        row["id"] for row in db.execute(
+            f"SELECT id FROM contact_groups WHERE owner_id=? AND id IN ({placeholders})",
+            (owner_id,*group_ids),
+        )
+    }
+    if allowed!=set(group_ids):
+        raise ValueError("A selected group does not exist in your workspace")
+    return allowed
+
+
+def set_contact_groups(db: sqlite3.Connection, owner_id: int,
+                       contact_id: int, group_ids: list[int]) -> None:
+    contact=db.execute(
+        "SELECT 1 FROM contacts WHERE id=? AND owner_id=? AND archived=0",
+        (contact_id,owner_id),
+    ).fetchone()
+    if contact is None:
+        raise ValueError("Contact not found in your workspace")
+    chosen=_allowed_group_ids(db,owner_id,group_ids)
+    db.execute("DELETE FROM contact_group_members WHERE contact_id=?", (contact_id,))
+    for group_id in sorted(chosen):
+        db.execute(
+            "INSERT INTO contact_group_members(group_id,contact_id,added_at) VALUES (?,?,?)",
+            (group_id,contact_id,now()),
+        )
+
+
+def set_group_members(db: sqlite3.Connection, owner_id: int,
+                      group_id: int, contact_ids: list[int]) -> None:
+    group=db.execute(
+        "SELECT 1 FROM contact_groups WHERE id=? AND owner_id=?",
+        (group_id,owner_id),
+    ).fetchone()
+    if not group:
+        raise ValueError("Group not found in your workspace")
+    if len(contact_ids)!=len(set(contact_ids)) or len(contact_ids)>20000:
+        raise ValueError("Invalid or duplicated contact selection")
+    if any(not isinstance(cid,int) or cid<=0 for cid in contact_ids):
+        raise ValueError("Invalid contact selection")
+    if contact_ids:
+        unique_ids=set(contact_ids)
+        for start in range(0,len(contact_ids),500):
+            chunk=contact_ids[start:start+500]
+            placeholders=",".join("?" for _ in chunk)
+            results=db.execute(
+                f"SELECT id FROM contacts WHERE owner_id=? AND archived=0 AND id IN ({placeholders})",
+                (owner_id,*chunk),
+            ).fetchall()
+            for item in results:unique_ids.discard(item["id"])
+        if unique_ids:
+            raise ValueError("A selected contact does not exist in your workspace")
+    db.execute("DELETE FROM contact_group_members WHERE group_id=?", (group_id,))
+    for contact_id in sorted(contact_ids):
+        db.execute(
+            "INSERT INTO contact_group_members(group_id,contact_id,added_at) VALUES (?,?,?)",
+            (group_id,contact_id,now()),
+        )
 
 
 def insert_contact(db: sqlite3.Connection, data: dict[str,str], owner_id: int, *, consent: bool=False, enabled: bool=True) -> int:

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading">
+  <div><a class="back-link" href="/contacts/groups">← All contact groups</a>
+    <span class="eyebrow accent">CONTACT GROUP</span>
+    <h1>{{ group['name'] }}</h1>
+    <p class="subtle">Select the contacts who belong to this group. Contact consent and enabled status remain unchanged.</p></div>
+  <a class="btn btn-primary" href="/compose?group_id={{ group['id'] }}">Broadcast to this group</a>
+</div>
+<div class="contacts-grid">
+  <section class="panel">
+    <div class="panel-head"><h2>Group members <span class="count-pill" id="group-member-count">{{ members|length }} selected</span></h2></div>
+    <form action="/contacts/groups/{{ group['id'] }}/members" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="group-member-toolbar">
+        <label class="checkline"><input id="group-member-select-all" type="checkbox"> Select all shown</label>
+        <input id="group-member-search" type="search" placeholder="Search contacts..." aria-label="Filter contacts">
+      </div>
+      <div class="group-member-scroll">
+      {% for contact in contacts %}
+      <label class="group-member-row" data-group-member-search="{{ (contact['name'] ~ ' ' ~ contact['username'] ~ ' ' ~ contact['phone'])|lower }}">
+        <input class="group-member-checkbox" type="checkbox" name="contacts" value="{{ contact['id'] }}"
+          {% if contact['id'] in members %}checked{% endif %}>
+        <span class="contact-avatar">{{ contact['name'][:1]|upper }}</span>
+        <span class="group-member-contact"><strong>{{ contact['name'] }}</strong>
+          <small>{{ contact['username'] or contact['phone'] or contact['user_id'] }}</small></span>
+        {% if not contact['enabled'] %}<span class="status status-muted">Disabled</span>
+        {% elif not contact['consent'] %}<span class="status status-pending">No consent</span>{% endif %}
+      </label>
+      {% else %}<div class="empty-state"><p>No contacts yet. <a href="/contacts">Add contacts</a> first.</p></div>
+      {% endfor %}
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Save group members</button>
+        <a class="btn btn-outline" href="/contacts/groups">Cancel</a></div>
+    </form>
+  </section>
+  <div class="side-stack">
+    <section class="panel"><div class="panel-head"><h2>Rename group</h2></div>
+      <form action="/contacts/groups/{{ group['id'] }}/rename" method="post" class="stack-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label for="group-name">Group name</label><input id="group-name" name="name" maxlength="64"
+          value="{{ group['name'] }}" required>
+        <button type="submit" class="btn btn-secondary">Rename group</button>
+      </form>
+    </section>
+    <div class="info-strip"><span>ⓘ</span><p>You can assign the same contact to several groups. Saving this membership list will not contact anyone. The broadcaster filters out disabled or non-consenting contacts when selecting recipients.</p></div>
+  </div>
+</div>
+{% endblock %}

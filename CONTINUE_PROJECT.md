@@ -24,3 +24,16 @@ Before making any changes:
     send messages, join groups or scan private chats. Preserve limits,
     cross-workspace protection and partial-result warnings. Do not scan
     real group data without an explicit user-selected group.
+
+
+14. The contact database remains SQLite under /opt/telegram-broadcaster/data.
+    Contact groups are owner-scoped many-to-many associations, not Telegram
+    chat groups. A contact can be in several groups, but consent and active
+    status are always checked separately for every broadcast. Ensure all
+    new routes respect authenticated owner IDs, and preserve existing
+    contacts, campaign history, and SQLite data during migrations.
+15. CSV Groups names are semicolon-separated and must match existing groups.
+    Do not automatically import Telegram group members into contact groups
+    or mark them opted in. Overlapping selected groups are unioned to
+    distinct contact IDs before drafting a message. Use SQLite online
+    backup and verify no sending jobs before rebuilding production.

@@ -276,14 +276,21 @@ async def home(request: Request):
 
 
 @app.get("/contacts")
-def contacts_page(request: Request, q: str = ""):
+def contacts_page(request: Request, q: str = "", group_id: int = 0):
     user=principal(request)
     with core.database() as db:
         rows = core.active_contact_rows(db,user["admin_id"])
+        groups=core.contact_groups(db,user["admin_id"])
+        membership=core.contact_group_map(db,user["admin_id"])
+    if group_id:
+        if not any(g["id"]==group_id for g in groups):
+            raise HTTPException(404,"Contact group not found")
+        rows=[c for c in rows if group_id in membership.get(c["id"],set())]
     if q:
         term = q.lower()[:120]
         rows = [x for x in rows if any(term in str(x[k]).lower() for k in ("name","username","phone","user_id","notes"))]
-    return render(request, "contacts.html", title="Contacts", contacts=rows, query=q, edit=None)
+    return render(request, "contacts.html", title="Contacts", contacts=rows, query=q,
+                  group_id=group_id, groups=groups, membership=membership)
 
 
 @app.post("/contacts")
@@ -291,16 +298,105 @@ def add_contact(
     request: Request, csrf: str = Form(""), name: str = Form(""),
     username: str = Form(""), phone: str = Form(""), user_id: str = Form(""),
     notes: str = Form(""), consent: str = Form(""), enabled: str = Form(""),
+    group_ids: list[int] = Form([]),
 ):
     user=authorize(request, csrf)
     try:
         item = core.normalize_contact(name, username, phone, user_id, notes)
         with core.database() as db:
-            core.insert_contact(db, item, user["admin_id"], consent=consent=="yes", enabled=enabled=="yes")
+            contact_id=core.insert_contact(db, item, user["admin_id"],
+                                           consent=consent=="yes", enabled=enabled=="yes")
+            core.set_contact_groups(db,user["admin_id"],contact_id,group_ids)
             db.commit()
     except ValueError as exc:
         return redirect("/contacts", str(exc))
     return redirect("/contacts", "Contact added to your private database.")
+
+
+@app.get("/contacts/groups")
+def contact_group_page(request: Request):
+    user=principal(request)
+    with core.database() as db:
+        groups=core.contact_groups(db,user["admin_id"])
+    return render(request,"contact_groups.html",title="Contact groups",groups=groups)
+
+
+@app.post("/contacts/groups")
+def create_contact_group_action(request: Request, csrf: str = Form(""),
+                                name: str = Form("")):
+    user=authorize(request,csrf)
+    try:
+        with core.database() as db:
+            group_id=core.add_contact_group(db,user["admin_id"],name)
+            db.commit()
+    except ValueError as exc:
+        return redirect("/contacts/groups",str(exc))
+    return redirect(f"/contacts/groups/{group_id}","Group created. Assign contacts below.")
+
+
+@app.get("/contacts/groups/{group_id}")
+def edit_group_page(request: Request, group_id: int):
+    user=principal(request)
+    with core.database() as db:
+        group=db.execute(
+            "SELECT id,name FROM contact_groups WHERE id=? AND owner_id=?",
+            (group_id,user["admin_id"]),
+        ).fetchone()
+        rows=core.active_contact_rows(db,user["admin_id"])
+        membership=core.contact_group_map(db,user["admin_id"])
+    if group is None:
+        raise HTTPException(404,"Contact group not found")
+    return render(request,"contact_group_edit.html",title="Manage group",
+                  group=group,contacts=rows,members={
+                      row["id"] for row in rows if group_id in membership.get(row["id"],set())
+                  })
+
+
+@app.post("/contacts/groups/{group_id}/rename")
+def rename_group_action(request: Request, group_id: int,
+                        csrf: str = Form(""), name: str = Form("")):
+    user=authorize(request,csrf)
+    try:
+        with core.database() as db:
+            core.update_contact_group(db,user["admin_id"],group_id,name)
+            db.commit()
+    except ValueError as exc:
+        return redirect("/contacts/groups",str(exc))
+    return redirect(f"/contacts/groups/{group_id}","Group renamed.")
+
+
+@app.post("/contacts/groups/{group_id}/members")
+async def edit_group_members(request: Request, group_id: int):
+    user=principal(request)
+    form=await request.form(max_fields=20_000)
+    authorize(request,str(form.get("csrf","")))
+    try:
+        contact_ids=[int(str(x)) for x in form.getlist("contacts")]
+        with core.database() as db:
+            if not db.execute(
+                "SELECT 1 FROM contact_groups WHERE id=? AND owner_id=?",
+                (group_id,user["admin_id"]),
+            ).fetchone():
+                raise HTTPException(404,"Contact group not found")
+            core.set_group_members(db,user["admin_id"],group_id,contact_ids)
+            db.commit()
+    except (ValueError,TypeError) as exc:
+        return redirect(f"/contacts/groups/{group_id}",str(exc))
+    return redirect(f"/contacts/groups/{group_id}","Group membership saved.")
+
+
+@app.post("/contacts/groups/{group_id}/delete")
+def delete_group_action(request: Request, group_id: int,csrf: str = Form("")):
+    user=authorize(request,csrf)
+    with core.database() as db:
+        removed=db.execute(
+            "DELETE FROM contact_groups WHERE id=? AND owner_id=?",
+            (group_id,user["admin_id"]),
+        )
+        if not removed.rowcount:
+            raise HTTPException(404,"Contact group not found")
+        db.commit()
+    return redirect("/contacts/groups","Group deleted. Contacts and broadcast history remain intact.")
 
 
 @app.get("/contacts/{contact_id}/edit")
@@ -308,9 +404,12 @@ def edit_contact_page(request: Request, contact_id: int):
     user=principal(request)
     with core.database() as db:
         record = db.execute("SELECT * FROM contacts WHERE id=? AND owner_id=? AND archived=0", (contact_id,user["admin_id"])).fetchone()
+        groups=core.contact_groups(db,user["admin_id"])
+        membership=core.contact_group_map(db,user["admin_id"])
     if record is None:
         raise HTTPException(404, "Contact not found")
-    return render(request, "contact_edit.html", title="Edit contact", contact=record)
+    return render(request, "contact_edit.html", title="Edit contact", contact=record,
+                  groups=groups, assigned_groups=membership.get(contact_id,set()))
 
 
 @app.post("/contacts/{contact_id}/edit")
@@ -318,6 +417,7 @@ def edit_contact_action(
     request: Request, contact_id: int, csrf: str = Form(""), name: str = Form(""),
     username: str = Form(""), phone: str = Form(""), user_id: str = Form(""),
     notes: str = Form(""), consent: str = Form(""), enabled: str = Form(""),
+    group_ids: list[int] = Form([]),
 ):
     user=authorize(request, csrf)
     try:
@@ -337,6 +437,7 @@ def edit_contact_action(
                 UPDATE contacts SET name=?,username=?,phone=?,user_id=?,notes=?,enabled=?,consent=?,updated_at=?
                 WHERE id=? AND owner_id=?
             """, (item["name"],item["username"],item["phone"],item["user_id"],item["notes"],int(enabled=="yes"),int(consent=="yes"),core.now(),contact_id,user["admin_id"]))
+            core.set_contact_groups(db,user["admin_id"],contact_id,group_ids)
             db.commit()
     except ValueError as exc:
         return redirect(f"/contacts/{contact_id}/edit", str(exc))
@@ -367,6 +468,8 @@ async def import_contacts(request: Request, csrf: str = Form(""), file: UploadFi
             raise ValueError("CSV requires a Name column and a Telegram ID, Username or Phone column")
         good = skipped = 0
         with core.database() as db:
+            group_names={group["name"].casefold():group["id"]
+                         for group in core.contact_groups(db,user["admin_id"])}
             for index, row in enumerate(reader):
                 if index >= 1000:
                     break
@@ -374,18 +477,31 @@ async def import_contacts(request: Request, csrf: str = Form(""), file: UploadFi
                 username = row.get("Username") or row.get("username") or (raw_identifier if raw_identifier.startswith("@") else "")
                 phone = row.get("Phone") or row.get("phone") or (raw_identifier if raw_identifier.startswith("+") else "")
                 numeric = row.get("User ID") or (raw_identifier if raw_identifier.isdigit() else "")
+                db.execute("SAVEPOINT import_contact")
                 try:
                     contact = core.normalize_contact(
                         row.get("Name") or row.get("name") or "", username, phone, numeric, row.get("Notes") or "",
                     )
                     yes = lambda v: str(v or "").lower().strip() in {"yes","true","1","y"}
-                    core.insert_contact(
+                    supplied_names=[name.strip() for name in (row.get("Groups") or "").split(";")
+                                    if name.strip()]
+                    selected_groups=[]
+                    for group_name in supplied_names:
+                        group_id=group_names.get(group_name.casefold())
+                        if group_id is None:
+                            raise ValueError("Unknown contact group in CSV. Create it before importing.")
+                        selected_groups.append(group_id)
+                    contact_id=core.insert_contact(
                         db,contact,user["admin_id"],
                         consent=yes(row.get("Opt In") or row.get("Consent")),
                         enabled=not yes(row.get("Do Not Contact")),
                     )
+                    core.set_contact_groups(db,user["admin_id"],contact_id,selected_groups)
+                    db.execute("RELEASE SAVEPOINT import_contact")
                     good += 1
                 except ValueError:
+                    db.execute("ROLLBACK TO SAVEPOINT import_contact")
+                    db.execute("RELEASE SAVEPOINT import_contact")
                     skipped += 1
             db.commit()
     except (UnicodeError, ValueError, csv.Error) as exc:
@@ -398,12 +514,20 @@ def export_contacts(request: Request):
     user=principal(request)
     with core.database() as db:
         rows = core.active_contact_rows(db,user["admin_id"])
+        groups=core.contact_groups(db,user["admin_id"])
+        membership=core.contact_group_map(db,user["admin_id"])
+    labels={group["id"]:group["name"] for group in groups}
     target = io.StringIO()
     writer = csv.writer(target)
-    writer.writerow(["Name","Username","Phone","User ID","Notes","Opt In","Enabled"])
+    writer.writerow(["Name","Username","Phone","User ID","Notes","Opt In","Enabled","Groups"])
     for r in rows:
+        group_names="; ".join(sorted(
+            (labels[gid] for gid in membership.get(r["id"],set()) if gid in labels),
+            key=str.casefold,
+        ))
         writer.writerow([r["name"],r["username"],r["phone"],r["user_id"],r["notes"],
-                         "yes" if r["consent"] else "no","yes" if r["enabled"] else "no"])
+                         "yes" if r["consent"] else "no","yes" if r["enabled"] else "no",
+                         group_names])
     return StreamingResponse(
         iter([target.getvalue()]),media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=telegram-contacts.csv","Cache-Control":"no-store"},
@@ -594,12 +718,13 @@ async def account_verify(request: Request, account_id: str, csrf: str = Form("")
 
 
 async def composer_context(owner_id: int, *, source_id: str = "",
-                           draft_id: str = "") -> dict:
+                           draft_id: str = "", group_id: int = 0) -> dict:
     """Prepare an editable form without ever sending Telegram messages."""
     await refresh_owner_sessions(owner_id)
     prefill={"message":"","account_id":"","contact_ids":set(),
              "from_campaign":"","edit_campaign":"","source":None,
-             "prior_sent":0,"prior_uncertain":0,"delivery_states":{}}
+             "prior_sent":0,"prior_uncertain":0,"delivery_states":{},
+             "selected_group_ids":set()}
     with core.database() as db:
         accounts=db.execute(
             "SELECT id,label,username FROM accounts WHERE owner_id=? "
@@ -609,6 +734,16 @@ async def composer_context(owner_id: int, *, source_id: str = "",
             "SELECT * FROM contacts WHERE owner_id=? AND archived=0 AND enabled=1 "
             "AND consent=1 ORDER BY name COLLATE NOCASE", (owner_id,),
         ).fetchall()
+        groups=core.contact_groups(db,owner_id)
+        membership=core.contact_group_map(db,owner_id)
+        if group_id and not (source_id or draft_id):
+            if not any(g["id"]==group_id for g in groups):
+                raise HTTPException(404,"Contact group not found")
+            prefill["selected_group_ids"]={group_id}
+            prefill["contact_ids"]={
+                contact["id"] for contact in contacts
+                if group_id in membership.get(contact["id"],set())
+            }
         if source_id or draft_id:
             campaign_id=draft_id or source_id
             campaign, deliveries=core.campaign_summary(db,campaign_id,owner_id)
@@ -631,13 +766,14 @@ async def composer_context(owner_id: int, *, source_id: str = "",
                                     for d in deliveries),
                 delivery_states={d["contact_id"]:d["state"] for d in deliveries},
             )
-    return {"accounts":accounts,"contacts":contacts,**prefill}
+    return {"accounts":accounts,"contacts":contacts,"groups":groups,
+            "membership":membership,**prefill}
 
 
 @app.get("/compose")
-async def compose(request: Request, from_campaign: str = ""):
+async def compose(request: Request, from_campaign: str = "", group_id: int = 0):
     user=principal(request)
-    context=await composer_context(user["admin_id"],source_id=from_campaign)
+    context=await composer_context(user["admin_id"],source_id=from_campaign,group_id=group_id)
     return render(request,"compose.html",title="Reuse broadcast" if from_campaign else "New broadcast",**context)
 
 

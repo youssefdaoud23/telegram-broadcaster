@@ -20,9 +20,22 @@ document.addEventListener("DOMContentLoaded",()=>{
     if(selectAll) selectAll.checked=checkboxes.length>0&&checkboxes.every(x=>x.checked);
   };
   for(const c of checkboxes)c.addEventListener("change",refreshRecipients);
+  const recipientGroups=[...document.querySelectorAll(".recipient-group-checkbox")];
+  for(const groupCheckbox of recipientGroups){
+    groupCheckbox.addEventListener("change",()=>{
+      const selectedGroups=recipientGroups.filter(box=>box.checked).map(box=>box.value);
+      for(const contactCheckbox of checkboxes){
+        const row=contactCheckbox.closest(".recipient-row");
+        const memberships=row ? (row.getAttribute("data-groups")||"") : "";
+        contactCheckbox.checked=selectedGroups.some(groupId=>memberships.includes("|"+groupId+"|"));
+      }
+      refreshRecipients();
+    });
+  }
   for(const button of document.querySelectorAll("[data-reuse-preset]")){
     button.addEventListener("click",()=>{
       const preset=button.getAttribute("data-reuse-preset");
+      for(const groupCheckbox of recipientGroups)groupCheckbox.checked=false;
       for(const checkbox of checkboxes){
         const previous=checkbox.getAttribute("data-previous-state")||"";
         checkbox.checked=(
@@ -37,6 +50,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     });
   }
   if(selectAll)selectAll.addEventListener("change",()=>{
+    for(const groupCheckbox of recipientGroups)groupCheckbox.checked=false;
     for(const c of checkboxes)c.checked=selectAll.checked;
     refreshRecipients();
   });
@@ -47,6 +61,33 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   });
   refreshRecipients();
+  const groupMemberChecks=[...document.querySelectorAll(".group-member-checkbox")];
+  const groupMemberSearch=document.getElementById("group-member-search");
+  const groupMemberCount=document.getElementById("group-member-count");
+  const groupMemberSelectAll=document.getElementById("group-member-select-all");
+  if(groupMemberChecks.length||groupMemberSearch){
+    const refreshGroupMembers=()=>{
+      const selected=groupMemberChecks.filter(c=>c.checked).length;
+      if(groupMemberCount)groupMemberCount.textContent=selected+" selected";
+      const shown=groupMemberChecks.filter(c=>!c.closest(".group-member-row").hidden);
+      if(groupMemberSelectAll)groupMemberSelectAll.checked=shown.length>0&&shown.every(c=>c.checked);
+    };
+    for(const checkbox of groupMemberChecks)checkbox.addEventListener("change",refreshGroupMembers);
+    if(groupMemberSelectAll)groupMemberSelectAll.addEventListener("change",()=>{
+      for(const checkbox of groupMemberChecks){
+        if(!checkbox.closest(".group-member-row").hidden)checkbox.checked=groupMemberSelectAll.checked;
+      }
+      refreshGroupMembers();
+    });
+    if(groupMemberSearch)groupMemberSearch.addEventListener("input",()=>{
+      const query=groupMemberSearch.value.trim().toLowerCase();
+      for(const row of document.querySelectorAll(".group-member-row")){
+        row.hidden=!(row.getAttribute("data-group-member-search")||"").includes(query);
+      }
+      refreshGroupMembers();
+    });
+    refreshGroupMembers();
+  }
   const groupSearch=document.getElementById("group-search");
   if(groupSearch){
     const groupRows=[...document.querySelectorAll(".group-export-item[data-group-name]")];

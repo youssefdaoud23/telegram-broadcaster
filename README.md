@@ -13,6 +13,64 @@ Self-hosted personal Telegram messaging dashboard with a beautiful browser UI, S
 
 **The GitHub repository is public. NEVER commit .env, Telegram session files, customer contacts, database files, API hashes, phone numbers, credentials or delivery logs.**
 
+## Contact database and private recipient groups
+
+The broadcaster already stores the contact directory, opted-in status,
+sender accounts, campaigns, and delivery history in a **local SQLite
+database**, mounted at `/data/broadcaster.sqlite3` inside Docker. Its
+persistent host folder is `/opt/telegram-broadcaster/data/`. **No remote
+contact database is required.**
+
+Contact segmentation uses two extra relational tables:
+
+- `contact_groups`: a private, named list owned by one broadcaster user,
+  with a unique name inside that workspace.
+- `contact_group_members`: a many-to-many relationship. One contact can
+  belong to zero, one, or many groups, and a group can contain any number
+  of contacts. Database triggers reject cross-workspace membership.
+
+Open **Contact groups** in the sidebar (also linked from Contacts) to
+create/rename/delete groups and manage their members. You can also assign
+several groups to an individual when adding or editing the contact. The
+Contacts page supports filtering by one group and shows group tags next
+to each person. Exported contact CSV files now have an optional **Groups**
+column containing existing group names separated by semicolons; import
+supports the same format. Create group names before importing membership
+CSV data. Each CSV row is processed atomically. Import never grants
+messaging consent automatically.
+
+When creating a broadcast, select **one or more contact groups** in
+"Choose recipients." Their eligible members are combined as a set, so
+contacts in multiple selected groups receive **one draft delivery**, not
+duplicates. You can then manually add/remove individuals before the
+separate preview and Send step. **Broadcast to this group** from the
+group-management page preselects the group's eligible members. Existing
+history and recipient snapshots are unchanged. Group membership never
+overrides the active and opt-in checks.
+
+Deleting a group deletes **only its membership links**, not the
+contact records, Telegram sessions, campaigns, or delivery histories.
+A group is an application audience list for individual private messages,
+not the Telegram group chats shown in "Group export."
+
+### Database choice
+
+SQLite is the recommended database for this single-host broadcaster:
+it is already integrated, durable, simple to back up with the SQLite
+online backup API, and has no extra service credentials or external
+network dependencies. Adding a cloud database would mean migrating all
+contact access, tenant ownership checks, backups, and secrets management.
+**Neon PostgreSQL** is a reasonable future upgrade if contacts need to
+be shared across multiple applications or horizontally scaled web
+workers. **Mem0** is an AI memory service, not the source of truth for
+contacts, group membership, and explicit consent. Neither Neon nor Mem0
+was provisioned for this change.
+
+The change is additive: existing contacts start without group assignments
+and can be organized without moving or deleting records. As with other
+schema upgrades, take a consistent SQLite backup before rebuilding
+production, and never interrupt an in-progress broadcast.
+
 ## Export member names, usernames and visible phone numbers from Telegram groups
 
 Open **Group export** in the sidebar. Choose one of your own **connected**

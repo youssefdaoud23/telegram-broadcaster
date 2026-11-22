@@ -15,7 +15,8 @@
     <nav aria-label="Main navigation">
       <a href="/" class="nav-item {% if current_path=='/' %}active{% endif %}"><span class="nav-icon">◫</span>Overview</a>
       <a href="/compose" class="nav-item {% if current_path.startswith('/compose') %}active{% endif %}"><span class="nav-icon">✉</span>New broadcast</a>
-      <a href="/contacts" class="nav-item {% if current_path.startswith('/contacts') %}active{% endif %}"><span class="nav-icon">♧</span>Contacts</a>
+      <a href="/contacts" class="nav-item {% if current_path.startswith('/contacts') and not current_path.startswith('/contacts/groups') %}active{% endif %}"><span class="nav-icon">♧</span>Contacts</a>
+      <a href="/contacts/groups" class="nav-item {% if current_path.startswith('/contacts/groups') %}active{% endif %}"><span class="nav-icon">◈</span>Contact groups</a>
       <a href="/accounts" class="nav-item {% if current_path.startswith('/accounts') %}active{% endif %}"><span class="nav-icon">◎</span>Telegram accounts</a>
       <a href="/groups" class="nav-item {% if current_path.startswith('/groups') %}active{% endif %}"><span class="nav-icon">♙</span>Group export</a>
       <a href="/campaigns" class="nav-item {% if current_path.startswith('/campaigns') %}active{% endif %}"><span class="nav-icon">▤</span>History</a>

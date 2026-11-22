@@ -189,3 +189,39 @@ existing auth, status and partial-result safeguards. Sanitize display names
 to prevent spreadsheet formula injection. Do not auto-add group members to
 Contacts or mark consent. New scans are required after deployment because
 previous scans live only in volatile memory.
+
+
+## Contact database decision and group segmentation (2026-11-22)
+
+Use the existing self-hosted SQLite database as the source of truth for
+contacts, groups, opt-in, account ownership, and delivery history.
+Avoid introducing Neon PostgreSQL unless real multi-app sharing or high
+write concurrency requires migration. Mem0 is an AI memory abstraction,
+not a contact relational database; never store consent only in memory.
+
+Additive schema tables:
+- contact_groups(id,owner_id,name,created_at,updated_at),
+  UNIQUE(owner_id,name COLLATE NOCASE)
+- contact_group_members(group_id,contact_id,added_at),
+  PRIMARY KEY(group_id,contact_id), with ON DELETE CASCADE to groups
+  and contacts plus triggers that reject linking different owners.
+
+User-management flow: /contacts/groups create/list, /contacts/groups/{id}
+rename/delete/member-management, contact Add/Edit forms with multi-group
+checkboxes, Contacts filtered by group_id, tagged contact list, and sidebar
+shortcut. Existing contacts remain unchanged and unassigned initially.
+CSV contact export/import includes a Groups column separated by semicolon
+and validates preexisting names; per-import row SAVEPOINT avoids accidental
+partial contact creation when group validation fails.
+
+composer_context supplies owner-only groups and memberships. /compose
+accepts group_id to prefill recipient selection; JS group checkboxes select
+the union of opted-in and enabled contact IDs, never duplicate overlapping
+contacts. Manual per-contact refinement remains possible. Server always
+validates the selected recipient IDs at draft creation/edit, and Send
+continues to require explicit review. No bulk Telegram group messages,
+auto-imports, consent changes, or automated sending are introduced.
+Do not confuse application contact groups with Telegram chat group-export.
+
+Production /opt source and SQLite data are untouched until authorized
+backup and deployment. No Neon credentials, new Docker service or Mem0.

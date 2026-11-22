@@ -171,3 +171,27 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [x] Preserve read-only/no-send behavior, workspace isolation and CSV authorization.
 - [x] Run offline tests for visible/hidden phones and name-only members.
 - [ ] Deploy to /opt/telegram-broadcaster when no sends are active.
+
+
+## Contacts database and many-to-many groups (2026-11-22)
+
+- [x] Retain self-hosted SQLite as the canonical contact database. No Neon
+      migration or Mem0 memory layer is necessary for the current workload.
+- [x] Add owner-scoped contact_groups and contact_group_members with indexes,
+      foreign keys and SQL triggers that reject cross-owner links.
+- [x] Provide group creation, rename, deletion, and bulk membership editing.
+- [x] Assign a contact to multiple groups from Add/Edit Contact pages.
+- [x] Show group tags and filtering on Contacts, with sidebar navigation.
+- [x] Add Groups column to contact CSV export and support importing existing
+      group names separated by semicolons with per-row savepoint rollback.
+- [x] Preselect members using /compose?group_id=... and support combining
+      groups by set union before manual per-recipient refinement.
+- [x] Preserve archived/disabled/nonconsenting contact restrictions, owner
+      isolation, draft review, and explicit user-initiated Send.
+- [x] Test group overlap, CSV roundtrip, deletion history preservation,
+      CSRF, database integrity and user isolation completely offline.
+- [ ] Before deployment: back up the live SQLite database, verify no active
+      send, pull the new GitHub commit into /opt/telegram-broadcaster, and
+      rebuild only broadcaster.
+- [ ] Verify contact counts and group UI after schema migration, without
+      sending any real Telegram messages.
