@@ -69,12 +69,16 @@ are linked to the group without duplicating them or deleting their previous
 group memberships. Conflicting identifiers are skipped, while an explicit
 re-import safely restores matching previously removed contacts using their
 original database record and group memberships. Restored contacts return as
-active with consent reset to No consent; any previous opt-in is recorded as
+Inactive with consent reset to No consent; any previous opt-in is recorded as
 withdrawn in the audit history. Group scans with partial results remain
 explicitly labeled incomplete.
 
-**No scanned member is automatically opted in**: newly imported and restored
-contacts start with consent disabled. Existing active contacts retain their
+**Every newly imported or restored contact starts Inactive** regardless of
+an Enabled column in the incoming CSV. You can activate them individually or
+in bulk afterward. Re-importing an existing contact does not override a
+previously chosen Active/Inactive status. Messaging permission remains a
+separate requirement: importing never grants consent, and a Telegram group
+membership alone does not establish opt-in. Existing contacts keep their
 recorded consent and enabled status. A shared Telegram group is not consent to receive
 private promotional messages. The app never sends or drafts messages as
 part of importing.
@@ -101,6 +105,9 @@ each member. The **Contacts** CSV importer also offers an optional **Import into
 contact group** name for older CSVs without group metadata. Both import paths
 safely reuse existing matches and add missing group associations, without
 changing existing consent, enabled status, notes, or unrelated memberships.
+
+CSV imports always create new contacts as Inactive, even if a supplied
+`Enabled` column says `yes`. The column remains in exports for backup purposes.
 
 CSV files can contain up to 5,000 contact rows (1 MB), with an explicit rejection
 instead of silent truncation. The import result reports created, linked,
