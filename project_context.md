@@ -264,3 +264,29 @@ documentation link to it. Reusers must retain the notice; the project
 provides no warranty. Third-party dependency licenses remain separate.
 This is a repository-only change. Do not rebuild or restart production
 as a side effect of changing the license.
+
+
+## Selectable website templates (2026-11-22)
+
+User requested a more sophisticated interface and switching between
+the original Telegram Web-inspired default and an optional new Space
+Science theme. Inspiration URL:
+https://freewebsitetemplates.com/preview/space-science/index.html
+Visual cues: dark space navigation, vivid purple nebula, burgundy accents,
+futuristic heading treatment. The project uses original CSS gradients,
+CSS orbit shapes, and no downloaded proprietary template assets/code.
+
+New .css: broadcaster/static/space-science.css. Current app.css and
+telegram-theme.css remain intact. Root html carries data-site-template
+attribute; Space CSS is scoped to "space", making Telegram Classic unchanged.
+The appearance page shows a preview of both options, and the topbar
+offers a quick server-side template select form. POST /settings/appearance
+requires CSRF, accepts only "telegram" or "space" and restricts redirect
+targets to safe local paths. GET /settings/appearance is authenticated.
+The selected theme is stored in admins.site_template with additive
+migration and default telegram, retrieved in core.session. Each website
+user has a distinct choice. Existing browser-local light/dark toggle
+remains intact; Space has its own key and defaults to the night palette.
+All theme assets are local and allowed by the existing CSP. No Telegram
+API calls, changes to sends, contacts, sessions, or campaign histories.
+Production /opt is NOT changed by editing the staging checkout.

@@ -1,10 +1,12 @@
 /* Theme switch and non-sending chat preview. No network or Telegram calls. */
 (() => {
-  const storageKey = "telegram-broadcaster-theme";
+  const isSpace = document.documentElement.dataset.siteTemplate === "space";
+  const storageKey = isSpace ? "telegram-broadcaster-space-color" : "telegram-broadcaster-theme";
   let requested = null;
   try { requested = window.localStorage.getItem(storageKey); } catch (_) {}
   const prefersDark = !!window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
-  const initial = (requested === "dark" || requested === "light") ? requested : (prefersDark ? "dark" : "light");
+  const initial = (requested === "dark" || requested === "light")
+    ? requested : (isSpace || prefersDark ? "dark" : "light");
   document.documentElement.dataset.theme = initial;
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -13,7 +15,9 @@
       const isDark = document.documentElement.dataset.theme === "dark";
       for (const button of toggles) {
         button.textContent = isDark ? "☀" : "☾";
-        button.title = isDark ? "Switch to Telegram day theme" : "Switch to Telegram night theme";
+        button.title = isSpace
+          ? (isDark ? "Switch to Cosmic day appearance" : "Switch to Cosmic night appearance")
+          : (isDark ? "Switch to Telegram day theme" : "Switch to Telegram night theme");
         button.setAttribute("aria-label", button.title);
         button.setAttribute("aria-pressed", isDark ? "true" : "false");
       }

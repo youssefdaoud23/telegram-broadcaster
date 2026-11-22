@@ -142,6 +142,15 @@ After editing the private `.env` for HTTPS, run `docker compose up -d --force-re
 
 Sending is **disabled** by default. A server operator may set `SEND_ENABLED=true` only after appropriate testing and confirming opt-in. This does not bypass Telegram's rate limits or anti-spam controls.
 
+## Choose the interface template
+
+After signing in, use **Appearance** to select **Telegram Classic** (the
+default) or **Space Science** (the optional cinematic theme). A quick
+**Template** selector is also provided in the top bar. The preference
+is stored per user in SQLite, while the moon/sun light/dark setting
+is browser-local. Theme selection never changes broadcasting behavior.
+The original space reference's images and code are **not** bundled.
+
 ## Next steps
 
 - [Settings reference](CONFIGURATION.md)

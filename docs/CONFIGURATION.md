@@ -42,3 +42,15 @@ The setup script creates a unique random 32-byte Fernet key. Keep backups of `.e
 See [Security](SECURITY.md) and [Operations](OPERATIONS.md).
 
 SQLite and session files require persistent storage on one instance.
+
+
+## Website appearance and templates
+
+The supported website template IDs are `telegram` and `space`.
+The application stores one `site_template` value on each website
+user's record, defaulting to `telegram`. There is no environment
+variable for overriding a user's preference; users select their own
+theme under Appearance. The day/night palette is stored locally in
+the browser, independently for each template, and requires no database
+migration. Both themes use only bundled CSS/HTML/JavaScript and are
+compatible with the existing Content Security Policy.

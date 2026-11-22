@@ -184,6 +184,8 @@ def init_db(*, recover_inflight: bool = False) -> None:
             db.execute("ALTER TABLE admins ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
         if "active" not in admin_columns:
             db.execute("ALTER TABLE admins ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+        if "site_template" not in admin_columns:
+            db.execute("ALTER TABLE admins ADD COLUMN site_template TEXT NOT NULL DEFAULT 'telegram'")
         owners = db.execute("SELECT id FROM admins WHERE role='owner' ORDER BY id").fetchall()
         if not owners:
             first = db.execute(
@@ -375,10 +377,26 @@ def session(db: sqlite3.Connection, raw: str | None) -> sqlite3.Row | None:
         return None
     digest = hashlib.sha256(raw.encode()).hexdigest()
     return db.execute("""
-        SELECT s.token_hash,s.admin_id,s.csrf,s.expires_at,a.username,a.role,a.active
+        SELECT s.token_hash,s.admin_id,s.csrf,s.expires_at,a.username,a.role,a.active,
+               a.site_template
         FROM sessions s JOIN admins a ON a.id=s.admin_id
         WHERE s.token_hash=? AND s.expires_at>? AND a.active=1
     """, (digest, now())).fetchone()
+
+
+SITE_TEMPLATES = ("telegram", "space")
+
+
+def set_site_template(db: sqlite3.Connection, user_id: int, template: str) -> None:
+    """Set only the authenticated user's UI choice; no campaign/data changes."""
+    if template not in SITE_TEMPLATES:
+        raise ValueError("Choose a supported website template")
+    changed = db.execute(
+        "UPDATE admins SET site_template=? WHERE id=? AND active=1",
+        (template, user_id),
+    )
+    if changed.rowcount != 1:
+        raise ValueError("User account not found or disabled")
 
 
 def revoke_session(db: sqlite3.Connection, raw: str | None) -> None:

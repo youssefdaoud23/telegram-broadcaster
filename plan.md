@@ -214,3 +214,22 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [x] Publish the owner-selected MIT License with clear copyright attribution.
 - [ ] Do not deploy to existing /opt installation without separate approval,
       database backup, and no-active-sends checks.
+
+
+## Website template switcher (2026-11-22)
+
+- [x] Study the provided Space Science visual reference and create an
+      original nebula and mission-control look without third-party artwork.
+- [x] Preserve the existing Telegram Classic design as the default.
+- [x] Add a second Space Science stylesheet scoped to explicit root theme.
+- [x] Add per-user persistent template preference and backward-compatible
+      additive admins.site_template SQLite migration.
+- [x] Add CSRF-protected choice save and safe local redirect validation.
+- [x] Add Appearance page with previews and a topbar Template selector.
+- [x] Keep independent day/night palette choices per template.
+- [x] Add Space-only dashboard hero and responsive styling on existing pages.
+- [x] Test switching, user isolation, security and migration without sends.
+- [ ] Verify exact visual rendering at desktop and mobile browser sizes.
+- [ ] Publish source to GitHub and verify CI success.
+- [ ] Deploy to /opt/telegram-broadcaster only after validated backup,
+      confirmation no campaigns are active and host Docker access.

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading appearance-heading">
+  <div>
+    <span class="eyebrow accent">PERSONALIZE YOUR WORKSPACE</span>
+    <h1>Choose your website template</h1>
+    <p class="subtle">Switch between two complete visual styles without changing your Telegram accounts, contacts, or broadcasts. Your selection follows your user account across devices.</p>
+  </div>
+</div>
+
+<section class="appearance-grid" aria-label="Website themes">
+  <form method="post" action="/settings/appearance" class="appearance-choice {% if site_template=='telegram' %}is-active{% endif %}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="site_template" value="telegram">
+    <input type="hidden" name="return_to" value="/settings/appearance">
+    <div class="appearance-preview classic-preview" aria-hidden="true">
+      <div class="preview-sidebar"><span class="preview-logo"></span><i></i><i></i><i></i><i></i></div>
+      <div class="preview-main"><div class="preview-bar"></div><div class="preview-title"></div><div class="preview-metrics"><span></span><span></span><span></span></div><div class="preview-panel"></div></div>
+    </div>
+    <div class="appearance-info">
+      <div><span class="eyebrow">CURRENT DESIGN</span><h2>Telegram Classic</h2><p>Clean, minimal, familiar. Soft blue accents and straightforward navigation.</p></div>
+      <span class="appearance-status">{% if site_template=='telegram' %}Selected{% else %}Available{% endif %}</span>
+    </div>
+    <button type="submit" class="btn {% if site_template=='telegram' %}btn-secondary{% else %}btn-primary{% endif %}" {% if site_template=='telegram' %}disabled{% endif %}>
+      {% if site_template=='telegram' %}Current template{% else %}Use Telegram Classic{% endif %}
+    </button>
+  </form>
+  <form method="post" action="/settings/appearance" class="appearance-choice {% if site_template=='space' %}is-active{% endif %}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="site_template" value="space">
+    <input type="hidden" name="return_to" value="/settings/appearance">
+    <div class="appearance-preview space-preview" aria-hidden="true">
+      <div class="preview-sidebar"><span class="preview-logo"></span><i></i><i></i><i></i><i></i></div>
+      <div class="preview-main"><div class="preview-bar"></div><div class="preview-title"></div><div class="preview-metrics"><span></span><span></span><span></span></div><div class="preview-panel"></div></div>
+      <div class="preview-orbit"></div>
+    </div>
+    <div class="appearance-info">
+      <div><span class="eyebrow">ALTERNATE DESIGN</span><h2>Space Science</h2><p>Immersive mission control. Nebula gradients, luminous indicators, and futuristic surfaces.</p></div>
+      <span class="appearance-status">{% if site_template=='space' %}Selected{% else %}Available{% endif %}</span>
+    </div>
+    <button type="submit" class="btn {% if site_template=='space' %}btn-secondary{% else %}btn-primary{% endif %}" {% if site_template=='space' %}disabled{% endif %}>
+      {% if site_template=='space' %}Current template{% else %}Use Space Science{% endif %}
+    </button>
+  </form>
+</section>
+
+<section class="panel appearance-note">
+  <h2>Also available: day and night appearance</h2>
+  <p class="subtle">Use the moon/sun icon in the top bar to change the color mode within your selected template. Your color preference is saved in this browser. Templates, color modes, user accounts, and broadcasting settings are independent.</p>
+</section>
+{% endblock %}

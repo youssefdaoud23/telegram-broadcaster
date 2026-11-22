@@ -55,6 +55,35 @@ Use that option instead of the default helper command. The helper preserves exis
 
 A **contact group** is an application-defined list for individual messages. It is different from a **Telegram group**, whose members may be available through the read-only group export page.
 
+## Website templates and appearance
+
+The interface includes two selectable designs. **Telegram Classic** is the
+original design and remains the default for new and existing users.
+**Space Science** is an original, space-inspired mission-control theme with
+cosmic gradients, darker navigation, status highlights, and a featured
+dashboard banner. The visual inspiration is the
+[Space Science template](https://freewebsitetemplates.com/preview/space-science/index.html);
+no stock artwork, downloaded images, external stylesheets, or code from that
+site are included in this repository.
+
+To change the look while signed in, open **Appearance** in the sidebar,
+compare the two previews, and select a template. You can also use the
+**Template** dropdown and Apply button in the top bar on any page. The choice
+is saved against **your own website account** and follows you across
+browsers and devices. Other users retain their own choices. Switching is
+visual only; it does not change Telegram connections, contacts, group
+membership, permissions, campaigns, or sending status.
+
+The existing moon/sun toggle remains available for light/dark appearances
+within either template. That color choice is saved locally in each browser
+and independently for Classic and Space Science. Space Science defaults
+to its night palette unless the user selected another palette.
+
+The appearance migration adds only the `admins.site_template` preference
+column, defaulting to `telegram`. Existing websites continue to show
+the original design until someone explicitly chooses Space Science.
+No external CDN, image host, API, or additional Docker service is required.
+
 ## Deployment and help
 
 | Guide | Purpose |

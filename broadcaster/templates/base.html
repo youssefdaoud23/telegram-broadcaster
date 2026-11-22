@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="en"><head>
+<html lang="en" data-site-template="{{ site_template }}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark"><title>{{ title or "Dashboard" }} · Telegram Broadcaster</title>
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/telegram-theme.css">
+<link rel="stylesheet" href="/static/space-science.css">
 <script src="/static/telegram-theme.js"></script>
 <script src="/static/app.js" defer></script>
 </head><body class="{% if not user %}auth-body{% else %}dashboard-body{% endif %}">
@@ -20,7 +21,8 @@
       <a href="/accounts" class="nav-item {% if current_path.startswith('/accounts') %}active{% endif %}"><span class="nav-icon">◎</span>Telegram accounts</a>
       <a href="/groups" class="nav-item {% if current_path.startswith('/groups') %}active{% endif %}"><span class="nav-icon">♙</span>Group export</a>
       <a href="/campaigns" class="nav-item {% if current_path.startswith('/campaigns') %}active{% endif %}"><span class="nav-icon">▤</span>History</a>
-      <a href="/settings/password" class="nav-item {% if current_path.startswith('/settings') %}active{% endif %}"><span class="nav-icon">⚿</span>Change password</a>
+      <a href="/settings/appearance" class="nav-item {% if current_path=='/settings/appearance' %}active{% endif %}"><span class="nav-icon">◉</span>Appearance</a>
+      <a href="/settings/password" class="nav-item {% if current_path=='/settings/password' %}active{% endif %}"><span class="nav-icon">⚿</span>Change password</a>
       {% if user['role']=='owner' %}
       <a href="/users" class="nav-item {% if current_path.startswith('/users') %}active{% endif %}"><span class="nav-icon">♙</span>User management</a>
       {% endif %}
@@ -31,6 +33,16 @@
     <header class="topbar">
       <div class="crumbs"><span class="workspace-identity">{{ user['username'] }}'s workspace</span> <span>/</span> <strong>{{ title or "Overview" }}</strong></div>
       <div class="topbar-right">
+        <form action="/settings/appearance" method="post" class="template-quick-switch" aria-label="Website template">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="return_to" value="{{ current_path }}">
+          <label for="site-template-switch" class="template-label">TEMPLATE</label>
+          <select id="site-template-switch" name="site_template" aria-label="Website template">
+            <option value="telegram" {% if site_template=='telegram' %}selected{% endif %}>Telegram Classic</option>
+            <option value="space" {% if site_template=='space' %}selected{% endif %}>Space Science</option>
+          </select>
+          <button type="submit" class="template-apply" title="Apply chosen website template">Apply</button>
+        </form>
         <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle day and night theme" aria-pressed="false">☾</button>
         {% if not send_enabled %}<span class="chip chip-amber"><span class="soft-dot"></span>Sending disabled</span>{% else %}<span class="chip chip-green"><span class="soft-dot"></span>Sending enabled</span>{% endif %}
         <span class="user-circle" title="{{ user['username'] }}"> {{ user['username'][:1]|upper }} </span>

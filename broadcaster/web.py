@@ -96,6 +96,11 @@ def render(request: Request, name: str, status_code: int = 200, **data):
         "send_enabled": os.getenv("SEND_ENABLED", "false").lower() == "true",
         "send_limit": core.recipient_limit(),
         "current_path": request.url.path,
+        "site_template": (
+            person["site_template"]
+            if person is not None and person["site_template"] in core.SITE_TEMPLATES
+            else "telegram"
+        ),
     }
     return templates.TemplateResponse(request, name, {**base, **data}, status_code=status_code)
 
@@ -111,6 +116,29 @@ async def handle_http_error(request: Request, exc: HTTPException):
             return JSONResponse({"error": "Sign in required"}, status_code=401)
         return redirect("/login")
     return problem(request, str(exc.detail), exc.status_code)
+
+
+@app.get("/settings/appearance")
+def appearance_page(request: Request):
+    principal(request)
+    return render(request, "appearance.html", title="Appearance")
+
+
+@app.post("/settings/appearance")
+def appearance_save(request: Request, csrf: str = Form(""),
+                    site_template: str = Form(""),
+                    return_to: str = Form("/settings/appearance")):
+    person = authorize(request, csrf)
+    if site_template not in core.SITE_TEMPLATES:
+        raise HTTPException(400, "Unknown website template")
+    with core.database() as db:
+        core.set_site_template(db, person["admin_id"], site_template)
+        db.commit()
+    # Paths are strictly local and must not become open redirects or
+    # unexpected query-string injections.
+    if not re.fullmatch(r"/[A-Za-z0-9/_-]*", return_to) or return_to.startswith("//"):
+        return_to = "/settings/appearance"
+    return redirect(return_to, "Website template updated.")
 
 
 @app.get("/settings/password")

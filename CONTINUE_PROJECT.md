@@ -52,3 +52,17 @@ Before making any changes:
     real Telegram messages or accesses existing account data.
 19. No LICENSE has been selected by the maintainer. Do not silently grant
     license rights without explicit approval.
+
+
+20. The site supports an optional Space Science-inspired template; Telegram
+    Classic remains the default. Keep all Space styling scoped to
+    root data-site-template="space", including responsive rules and
+    day/night palettes. Never import the original template's third-party
+    imagery or code. Theme preference is persisted per website user via
+    admins.site_template and only changed by authenticated CSRF-checked
+    POST /settings/appearance. Do not change broadcasting state when
+    changing appearance. Login remains on default Classic presentation
+    until a website session is authenticated.
+21. UI work is developed independently from production. Before any live
+    /opt upgrade, verify no active sends and make a consistent backup.
+    Keep the other Docker services, SQLite data, and Telegram sessions intact.
