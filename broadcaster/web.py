@@ -417,7 +417,11 @@ def campaigns_page(request: Request):
     with core.database() as db:
         rows=db.execute("""
             SELECT c.id,c.state,c.created_at,c.total,a.label,
-            (SELECT COUNT(*) FROM deliveries d WHERE d.campaign_id=c.id AND d.state='sent') sent
+            (SELECT COUNT(*) FROM deliveries d WHERE d.campaign_id=c.id AND d.state='sent') sent,
+            (SELECT COUNT(*) FROM deliveries d JOIN contacts ct ON ct.id=d.contact_id
+             WHERE d.campaign_id=c.id AND d.state='pending'
+               AND ct.archived=0 AND ct.enabled=1 AND ct.consent=1) retryable,
+            (SELECT retry_campaign_id FROM campaign_retries r WHERE r.source_campaign_id=c.id) retry_id
             FROM campaigns c JOIN accounts a ON a.id=c.account_id ORDER BY c.created_at DESC LIMIT 100
         """).fetchall()
     return render(request,"campaigns.html",title="Broadcast history",campaigns=rows)
@@ -428,10 +432,34 @@ def campaign_page(request: Request, campaign_id: str):
     principal(request)
     with core.database() as db:
         campaign, deliveries=core.campaign_summary(db,campaign_id)
+        retryable=core.retryable_count(db,campaign_id) if campaign else 0
+        retry_row=db.execute(
+            "SELECT retry_campaign_id FROM campaign_retries WHERE source_campaign_id=?",
+            (campaign_id,),
+        ).fetchone()
     if campaign is None:raise HTTPException(404,"Campaign not found")
     counts={}
     for d in deliveries:counts[d["state"]]=counts.get(d["state"],0)+1
-    return render(request,"campaign_detail.html",title="Broadcast details",campaign=campaign,deliveries=deliveries,counts=counts)
+    return render(request,"campaign_detail.html",title="Broadcast details",
+                  campaign=campaign,deliveries=deliveries,counts=counts,
+                  retryable=retryable,retry_id=retry_row["retry_campaign_id"] if retry_row else None)
+
+
+@app.post("/campaigns/{campaign_id}/retry")
+def retry_campaign(request: Request, campaign_id: str, csrf: str = Form("")):
+    authorize(request,csrf)
+    limit=max(1,min(100,int(os.getenv("SEND_MAX_RECIPIENTS","3"))))
+    try:
+        with core.database() as db:
+            new_id,created=core.create_retry_draft(db,campaign_id,limit)
+            db.commit()
+    except ValueError as exc:
+        return redirect(f"/campaigns/{campaign_id}",str(exc))
+    return redirect(
+        f"/campaigns/{new_id}",
+        "New draft created from pending opted-in recipients. Review before sending."
+        if created else "A retry draft already exists. Review it before sending.",
+    )
 
 
 @app.post("/campaigns/{campaign_id}/send")

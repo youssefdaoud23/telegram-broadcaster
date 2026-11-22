@@ -131,6 +131,49 @@ persisted campaign/delivery states and Telegram's own chat history. The
 administrator CLI no longer triggers in-flight recovery when initializing its
 database connection.
 
+## Interrupted broadcasts: Try again without duplicate sends
+
+Open **History**. An interrupted broadcast displays **Try again** when at
+least one recipient is still eligible and has the exact delivery state
+`pending` (meaning sending was never started for that recipient). The same
+button is available on its Details page.
+
+**Try again creates a separate draft; it never sends messages.** The draft
+keeps the original message and sending account, but copies **only** pending,
+enabled, opted-in, non-archived contacts. It deliberately excludes recipients
+marked sent, sending, unknown, failed, blocked or skipped, since the actual
+Telegram delivery outcome could be uncertain or they may be ineligible.
+The original history remains unchanged.
+
+Repeatedly clicking Try again on the same interrupted campaign returns to the
+same retry draft instead of creating multiple drafts. If there are no safely
+retryable contacts, the button is hidden and the Details page explains why.
+Review the exact recipients in the newly created draft before clicking Send.
+A later interruption may be retried from its own new interrupted campaign.
+
+## Recipient capacity: more than three contacts
+
+**Contact storage is not limited to three.** The default safety setting
+`SEND_MAX_RECIPIENTS=3` limits **one broadcast** to three recipients while
+testing. Selecting more than that limit is rejected; it does not silently
+send to just the first three.
+
+To allow a larger broadcast, edit **only** the local private `.env` on your
+server, for example `SEND_MAX_RECIPIENTS=20` (the application caps this
+setting at 100 per broadcast). With no active broadcast running, recreate
+only this app:
+
+~~~bash
+cd /root/n8n/telegram-broadcaster
+docker compose up -d --no-deps --force-recreate broadcaster
+~~~
+
+Existing contacts and message history remain in the persistent `data/`
+directory. A restart marks any orphaned in-progress campaigns interrupted
+instead of retrying them automatically. Telegram may enforce additional rate
+limits or messaging restrictions regardless of this setting. Send only to
+recipients who explicitly opted in, and start with small verified batches.
+
 ## Deployment workflow
 
 Always use GitHub as the source of truth. Develop on a feature branch, run tests, merge into main, then update the separate server checkout:

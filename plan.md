@@ -48,3 +48,17 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [ ] Fix cosmetic missing favicon (HTTP 404) if desired.
 - [ ] Review unexpected public exposure of port 8789 and secure direct origin
   access before relying on short administrator passwords.
+
+## Safe retry and recipient limit (2026-11-22)
+
+- [x] Add an idempotent **Try again** action to interrupted campaigns in History and Details.
+- [x] Retry only currently opted-in, enabled recipients with the exact delivery
+      state pending; never automatically retry sent/unknown/sending/failed/blocked.
+- [x] Create a separate reviewable draft with explicit Send as a later action.
+- [x] Preserve original campaign history and link retry draft to original via
+      a new `campaign_retries` table (non-destructive migration).
+- [x] Clarify the default 3-recipient per-broadcast safety limit and document
+      changing SEND_MAX_RECIPIENTS in the private server .env (hard cap 100).
+- [x] Add offline tests for retry eligibility, idempotency, CSRF and limits.
+- [ ] Rebuild only broadcaster container when there are no active sends.
+- [ ] Confirm retry button and preview of a previously interrupted broadcast.

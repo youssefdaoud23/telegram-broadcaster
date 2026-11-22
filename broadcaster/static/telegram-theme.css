@@ -408,3 +408,19 @@ label { color: var(--tg-text); }
   .tg-compose-inputs { padding: 18px 16px; }
   .login-hero { padding: 26px; }
 }
+
+/* Compact history actions; respects the existing Telegram day/night theme. */
+.history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.history-actions .inline-form { margin: 0; }
+.history-actions .btn {
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 18px;
+  font-size: 11px;
+}
+.history-actions .text-link { white-space: nowrap; }

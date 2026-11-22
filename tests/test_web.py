@@ -149,6 +149,78 @@ class WebsiteTests(unittest.TestCase):
         self.assertEqual(campaign["state"], "queued")
         self.assertEqual(delivery["state"], "pending")
 
+    def test_interrupted_try_again_creates_reviewable_draft_only(self):
+        import uuid
+        from unittest.mock import patch
+
+        csrf=self.sign_in()
+        sender=uuid.uuid4().hex
+        with core.database() as db:
+            db.execute(
+                "INSERT INTO accounts(id,label,api_id,api_hash_enc,phone_enc,session_name,state,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,'connected',?,?)",
+                (sender,"Offline sender",12345,core.encrypt("testhash"),core.encrypt("+420123456789"),
+                 sender,core.now(),core.now()),
+            )
+            ids=[]
+            for n in range(2):
+                ids.append(core.insert_contact(
+                    db,core.normalize_contact(f"Test{n}",f"@retrywebtest{n}","","",""),
+                    consent=True,
+                ))
+            source=core.create_campaign(db,sender,"Not sent automatically",ids,3)
+            db.execute("UPDATE campaigns SET state='interrupted' WHERE id=?",(source,))
+            db.execute(
+                "UPDATE deliveries SET state='unknown' WHERE campaign_id=? AND contact_id=?",
+                (source,ids[0]),
+            )
+            db.commit()
+
+        history=self.testclient.get("/campaigns")
+        self.assertEqual(history.status_code,200)
+        self.assertIn(f"/campaigns/{source}/retry",history.text)
+        details=self.testclient.get(f"/campaigns/{source}")
+        self.assertIn("Try again",details.text)
+        bad=self.testclient.post(
+            f"/campaigns/{source}/retry",data={"csrf":"wrong"},
+            follow_redirects=False,
+        )
+        self.assertEqual(bad.status_code,403)
+
+        os.environ["SEND_ENABLED"]="true"
+        with patch("broadcaster.web.telegram.enqueue",side_effect=AssertionError("No Telegram API expected")) as sending:
+            res=self.testclient.post(
+                f"/campaigns/{source}/retry",data={"csrf":csrf},
+                follow_redirects=False,
+            )
+            self.assertEqual(res.status_code,303)
+            retry=res.headers["location"].split("?")[0].split("/")[-1]
+            self.assertNotEqual(retry,source)
+            second=self.testclient.post(
+                f"/campaigns/{source}/retry",data={"csrf":csrf},
+                follow_redirects=False,
+            )
+            self.assertEqual(second.status_code,303)
+            self.assertIn(f"/campaigns/{retry}",second.headers["location"])
+            sending.assert_not_called()
+
+        with core.database() as db:
+            old=db.execute("SELECT state FROM campaigns WHERE id=?",(source,)).fetchone()
+            new=db.execute("SELECT state,total,message FROM campaigns WHERE id=?",(retry,)).fetchone()
+            attempts=db.execute("SELECT contact_id,state FROM deliveries WHERE campaign_id=?",(retry,)).fetchall()
+            self.assertEqual(old["state"],"interrupted")
+            self.assertEqual(new["state"],"draft")
+            self.assertEqual(new["message"],"Not sent automatically")
+            self.assertEqual(new["total"],1)
+            self.assertEqual([(d["contact_id"],d["state"]) for d in attempts],[(ids[1],"pending")])
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM campaigns").fetchone()[0],2)
+
+        page=self.testclient.get(f"/campaigns/{retry}")
+        self.assertEqual(page.status_code,200)
+        self.assertIn("Send 1 private message",page.text)
+        self.assertIn("Not sent automatically",page.text)
+        self.assertIn("View retry",self.testclient.get("/campaigns").text)
+
     def test_add_contact_and_import(self):
         csrf=self.sign_in()
         response=self.testclient.post("/contacts",data={

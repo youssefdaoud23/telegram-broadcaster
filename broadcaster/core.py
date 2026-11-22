@@ -103,6 +103,11 @@ CREATE TABLE IF NOT EXISTS deliveries (
  UNIQUE(campaign_id,contact_id)
 );
 CREATE INDEX IF NOT EXISTS idx_deliveries_campaign ON deliveries(campaign_id);
+CREATE TABLE IF NOT EXISTS campaign_retries (
+ source_campaign_id TEXT PRIMARY KEY REFERENCES campaigns(id),
+ retry_campaign_id TEXT NOT NULL UNIQUE REFERENCES campaigns(id),
+ created_at INTEGER NOT NULL
+);
 """
 
 
@@ -335,3 +340,63 @@ def campaign_summary(db: sqlite3.Connection, campaign_id: str) -> tuple[sqlite3.
     """, (campaign_id,)).fetchone()
     d=db.execute("SELECT * FROM deliveries WHERE campaign_id=? ORDER BY id", (campaign_id,)).fetchall()
     return c,d
+
+def retryable_count(db: sqlite3.Connection, source_id: str) -> int:
+    """Only never-started, currently opted-in recipients can be retried."""
+    row = db.execute("""
+        SELECT COUNT(*) AS count
+        FROM deliveries d
+        JOIN contacts c ON c.id=d.contact_id
+        WHERE d.campaign_id=? AND d.state='pending'
+          AND c.archived=0 AND c.enabled=1 AND c.consent=1
+    """, (source_id,)).fetchone()
+    return int(row["count"])
+
+
+def create_retry_draft(db: sqlite3.Connection, source_id: str, limit: int) -> tuple[str, bool]:
+    """Create at most one reviewed draft for an interrupted campaign.
+
+    Never retry sent, unknown, sending, failed or blocked results because their
+    actual Telegram outcome might be ambiguous. No Telegram API calls here.
+    Caller commits. BEGIN IMMEDIATE serializes simultaneous retry requests.
+    """
+    db.execute("BEGIN IMMEDIATE")
+    source = db.execute(
+        "SELECT id,account_id,message,state FROM campaigns WHERE id=?", (source_id,)
+    ).fetchone()
+    if source is None:
+        raise ValueError("Original broadcast not found")
+    if source["state"] != "interrupted":
+        raise ValueError("Only interrupted broadcasts can be retried this way")
+    earlier = db.execute(
+        "SELECT retry_campaign_id FROM campaign_retries WHERE source_campaign_id=?",
+        (source_id,),
+    ).fetchone()
+    if earlier:
+        return earlier["retry_campaign_id"], False
+
+    eligible = db.execute("""
+        SELECT d.contact_id FROM deliveries d
+        JOIN contacts c ON c.id=d.contact_id
+        WHERE d.campaign_id=? AND d.state='pending'
+          AND c.archived=0 AND c.enabled=1 AND c.consent=1
+        ORDER BY d.id
+    """, (source_id,)).fetchall()
+    ids = [int(d["contact_id"]) for d in eligible]
+    if not ids:
+        raise ValueError(
+            "No safely retryable recipients remain. Only pending, opted-in recipients "
+            "can be copied; sent or uncertain results require manual review."
+        )
+    if len(ids) > limit:
+        raise ValueError(
+            f"This broadcast has {len(ids)} pending recipients, but the current "
+            f"per-broadcast limit is {limit}. Increase SEND_MAX_RECIPIENTS or "
+            "create a smaller broadcast manually."
+        )
+    retry_id = create_campaign(db, source["account_id"], source["message"], ids, limit)
+    db.execute(
+        "INSERT INTO campaign_retries(source_campaign_id,retry_campaign_id,created_at) VALUES (?,?,?)",
+        (source_id, retry_id, now()),
+    )
+    return retry_id, True

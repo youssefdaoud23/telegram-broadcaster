@@ -44,7 +44,7 @@
     </label>
     {% else %}<div class="empty-state"><span class="empty-icon">♧</span><h3>No eligible contacts</h3><p>Enable contacts and record their messaging consent first.</p><a href="/contacts" class="btn btn-secondary">Manage contacts</a></div>{% endfor %}
   </div>
-  <div class="recipient-footer">Current safety limit: {{ send_limit }} recipients per broadcast. {% if not send_enabled %}Delivery is disabled until activated in server settings.{% endif %}</div>
+  <div class="recipient-footer">You can keep as many contacts as you need. Current broadcast limit: {{ send_limit }} recipients per send (configurable in server settings, up to 100). {% if not send_enabled %}Delivery is disabled until activated in server settings.{% endif %}</div>
 </section>
 </form>
 {% endblock %}

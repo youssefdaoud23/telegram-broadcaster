@@ -42,3 +42,19 @@ Do not change or restart any existing service for the new application.
 
 ## UI theme
 Telegram Web-inspired light/dark mode is implemented in the separate telegram-theme.css and telegram-theme.js assets, loaded by the shared base template. The compose page shows a local-only live message bubble preview and Telegram-style recipient list; theme preference is browser-local. This is presentation logic only and does not change sending permissions, authentication, recipient validation, databases, or Telegram sessions.
+
+## Safe retry design
+
+Interrupted broadcasts expose **Try again** in History and Details only if
+there are eligible pending recipients; the POST requires the existing
+administrator session and CSRF token. `core.create_retry_draft()` holds an
+immediate SQLite transaction, checks the source state, filters deliveries to
+pending plus current enabled/consented/non-archived contact state, enforces
+SEND_MAX_RECIPIENTS, and creates a new draft with the original sender and
+message. `campaign_retries` maps each source to one retry draft to make
+repeated clicks idempotent; it does not modify the original delivery records.
+Nothing sends until the administrator separately reviews and clicks Send.
+Never retry unknown, sending, failed, blocked or sent delivery results
+automatically. Source database and Telegram session files stay local and
+must not be published. The default broadcast limit is 3, adjustable locally
+up to hard application cap 100; contacts database itself is not so limited.

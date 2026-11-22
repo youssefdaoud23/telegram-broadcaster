@@ -122,6 +122,93 @@ class PersistenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 core.create_campaign(db,uid,"Hi!",[cid,cid,cid,cid],3)
 
+    def test_retry_draft_only_copies_pending_opted_in_contacts(self):
+        import uuid
+        sender = uuid.uuid4().hex
+        with core.database() as db:
+            db.execute(
+                "INSERT INTO accounts(id,label,api_id,api_hash_enc,phone_enc,session_name,state,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,'connected',?,?)",
+                (sender,"Offline sender",123,core.encrypt("hash"),core.encrypt("+420123456789"),
+                 sender,core.now(),core.now()),
+            )
+            ids=[]
+            for n in range(5):
+                ids.append(core.insert_contact(
+                    db,core.normalize_contact(
+                        f"Test{n}",f"@pendingtest{n}","", "",""
+                    ),consent=True,
+                ))
+            original=core.create_campaign(db,sender,"Original text",ids,5)
+            states=["sent","unknown","failed","pending","pending"]
+            for cid,state in zip(ids,states):
+                db.execute(
+                    "UPDATE deliveries SET state=? WHERE campaign_id=? AND contact_id=?",
+                    (state,original,cid),
+                )
+            db.execute("UPDATE contacts SET enabled=0 WHERE id=?",(ids[4],))
+            db.execute("UPDATE campaigns SET state='interrupted' WHERE id=?",(original,))
+            db.commit()
+
+        with core.database() as db:
+            self.assertEqual(core.retryable_count(db,original),1)
+            retry, created=core.create_retry_draft(db,original,3)
+            db.commit()
+            self.assertTrue(created)
+            self.assertNotEqual(retry,original)
+            old=db.execute("SELECT state FROM campaigns WHERE id=?",(original,)).fetchone()
+            new=db.execute("SELECT state,account_id,message,total FROM campaigns WHERE id=?",(retry,)).fetchone()
+            delivery=db.execute("SELECT contact_id,state FROM deliveries WHERE campaign_id=?",(retry,)).fetchall()
+            self.assertEqual(old["state"],"interrupted")
+            self.assertEqual(new["state"],"draft")
+            self.assertEqual(new["total"],1)
+            self.assertEqual(new["message"],"Original text")
+            self.assertEqual(new["account_id"],sender)
+            self.assertEqual([(d["contact_id"],d["state"]) for d in delivery],[(ids[3],"pending")])
+        with core.database() as db:
+            duplicate, created=core.create_retry_draft(db,original,3)
+            db.commit()
+            self.assertFalse(created)
+            self.assertEqual(duplicate,retry)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM campaigns").fetchone()[0],2)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM campaign_retries").fetchone()[0],1)
+
+    def test_retry_draft_rejects_uncertain_and_enforces_limit(self):
+        import uuid
+        sender=uuid.uuid4().hex
+        with core.database() as db:
+            db.execute(
+                "INSERT INTO accounts(id,label,api_id,api_hash_enc,phone_enc,session_name,state,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,'connected',?,?)",
+                (sender,"Offline sender",123,core.encrypt("hash"),core.encrypt("+420123456789"),
+                 sender,core.now(),core.now()),
+            )
+            ids=[]
+            for n in range(2):
+                ids.append(core.insert_contact(db,core.normalize_contact(
+                    f"Contact{n}",f"@retrycontact{n}","","",""
+                ),consent=True))
+            uncertain=core.create_campaign(db,sender,"Uncertain",[ids[0]],3)
+            db.execute("UPDATE campaigns SET state='interrupted' WHERE id=?",(uncertain,))
+            db.execute("UPDATE deliveries SET state='unknown' WHERE campaign_id=?",(uncertain,))
+            too_many=core.create_campaign(db,sender,"Pending",[ids[0],ids[1]],3)
+            db.execute("UPDATE campaigns SET state='interrupted' WHERE id=?",(too_many,))
+            db.commit()
+
+        with core.database() as db:
+            with self.assertRaisesRegex(ValueError,"No safely retryable"):
+                core.create_retry_draft(db,uncertain,3)
+        with core.database() as db:
+            with self.assertRaisesRegex(ValueError,"per-broadcast limit is 1"):
+                core.create_retry_draft(db,too_many,1)
+        with core.database() as db:
+            new_id,created=core.create_retry_draft(db,too_many,2)
+            db.commit()
+            self.assertTrue(created)
+            self.assertEqual(db.execute("SELECT total FROM campaigns WHERE id=?",(new_id,)).fetchone()[0],2)
+            with self.assertRaisesRegex(ValueError,"Only interrupted"):
+                core.create_retry_draft(db,new_id,2)
+
     def test_uncertain_campaign_never_auto_retried(self):
         import uuid
         uid=uuid.uuid4().hex
