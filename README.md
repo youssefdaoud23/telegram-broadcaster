@@ -19,7 +19,7 @@ FastAPI · Telethon 1.x · Jinja2 · Python 3.12 · SQLite · vanilla JavaScript
 
 ## Deploy on your own server (independent of the existing n8n setup)
 
-The website is **localhost-only** by default. Do not expose it publicly without an HTTPS access-protected reverse proxy.
+The website uses the **same host-port publishing approach as n8n**: Docker listens on port 8789 of the host. Configure Cloudflare Tunnel with your server's public IP and port; do not share secrets or session files. Protect the website and, ideally, restrict direct access to the origin port.
 
 1. Clone the canonical repository:
 
@@ -64,7 +64,7 @@ PY
    docker compose ps
    ~~~
 
-   The website binds to 127.0.0.1:8789 only. From your computer, open an SSH tunnel:
+   The website listens on the server's port 8789, like n8n on port 5678. For private direct testing you can also open an SSH tunnel:
 
    ~~~bash
    ssh -L 8789:127.0.0.1:8789 root@YOUR_SERVER
@@ -104,7 +104,7 @@ This sequence never changes your existing n8n container, Google Sheets workflow,
 
 ## Security / operational notes
 
-- The webpage currently supports administrator authentication and CSRF protection on all authenticated mutation routes.
+- The webpage currently supports administrator authentication and CSRF protection on all authenticated mutation routes. Because port 8789 is published on the host, Cloudflare Access on the hostname by itself will NOT protect users connecting directly to the server IP:port; use firewall restrictions or private-origin routing if this is not acceptable.
 - Keep the app bound to localhost, or add HTTPS behind an authenticated proxy (e.g. Cloudflare Access). For HTTPS access set COOKIE_SECURE=true and review proxy trust, DNS, and authentication rules before exposing the site.
 - Telegram privacy and spam restrictions still apply. An arbitrary phone number or numeric ID may not be resolvable. Phone lookup works best for already known contacts.
 - The sender sessions are protected, local secrets. The new app deliberately does not share the existing bridge's session file.
@@ -121,13 +121,25 @@ python -m unittest discover -s tests -v
 ~~~
 
 More details: project_context.md, plan.md, CONTINUE_PROJECT.md.
-## Cloudflare Tunnel (existing server)
+## Cloudflare Tunnel (same host-port approach as existing n8n)
 
-The broadcaster deliberately publishes the website to `127.0.0.1:8789` only. Do **not** configure the tunnel origin as `http://72.61.177.85:8789` or expose port 8789 publicly.
+The existing n8n Docker Compose publishes port `5678:5678`. This application now publishes `8789:8080` using the same pattern; no additional Docker networking is required.
 
-The Compose service is also attached to the existing `cloudflare_default` Docker network with alias `telegram-broadcaster-origin` (this network must already exist). In the Cloudflare dashboard, edit the tunnel's published application route for `telegram-broadcaster.youssefdaoud.com`:
+For the existing tunnel's published route:
 
-- Service protocol: **HTTP**
-- Service URL: **`http://telegram-broadcaster-origin:8080`**
+- Public hostname: **telegram-broadcaster.youssefdaoud.com**
+- Service type: **HTTP**
+- Origin URL: **http://72.61.177.85:8789**
 
-On the server, after `git pull --ff-only origin main`, set `COOKIE_SECURE=true` and `PUBLIC_BASE_URL=https://telegram-broadcaster.youssefdaoud.com` in your private `.env`, then run `docker compose up -d --force-recreate broadcaster` (only this app). Check `https://telegram-broadcaster.youssefdaoud.com/health` for `status: ok`. Since this is a login for Telegram accounts, protect the hostname with **Cloudflare Access** as an additional login layer. Do not alter or restart the Cloudflare tunnel container or other services.
+After updating GitHub, pull the latest commit on the server and recreate only this application:
+
+~~~bash
+cd /root/n8n/telegram-broadcaster
+git pull --ff-only origin main
+docker compose up -d --no-deps --force-recreate broadcaster
+curl -fsS http://127.0.0.1:8789/health
+~~~
+
+The private server-side `.env` should contain `COOKIE_SECURE=true` and `PUBLIC_BASE_URL=https://telegram-broadcaster.youssefdaoud.com`. Do not commit `.env` or restart the unrelated tunnel/n8n containers.
+
+**Security:** Like n8n's host port, this port can be reached directly by the public IP if the firewall permits it. Cloudflare Access does **not** protect direct IP connections. Because this website holds Telegram account credentials and may use user-chosen short passwords, strongly prefer restricting the direct port in the server firewall to known authorized origins or switching to a private tunnel origin later. Always use HTTPS on the public hostname.
