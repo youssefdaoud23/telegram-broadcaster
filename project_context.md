@@ -39,3 +39,6 @@ Do not change or restart any existing service for the new application.
 - Before website deployment validate security and initialize admin; keep site local-only until HTTPS/access control is approved.
 - Do not send Telegram messages unless user explicitly authorizes a live test and the recipient list is confirmed.
 - Update plan.md and this file after changes.
+
+## UI theme
+Telegram Web-inspired light/dark mode is implemented in the separate telegram-theme.css and telegram-theme.js assets, loaded by the shared base template. The compose page shows a local-only live message bubble preview and Telegram-style recipient list; theme preference is browser-local. This is presentation logic only and does not change sending permissions, authentication, recipient validation, databases, or Telegram sessions.

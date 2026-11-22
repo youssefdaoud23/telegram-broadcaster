@@ -13,6 +13,18 @@ Self-hosted personal Telegram messaging dashboard with a beautiful browser UI, S
 
 **The GitHub repository is public. NEVER commit .env, Telegram session files, customer contacts, database files, API hashes, phone numbers, credentials or delivery logs.**
 
+## Telegram Web-inspired interface
+
+The web interface uses a Telegram-inspired day/night visual theme with rounded
+contacts, a conversation-style message preview and a split recipient/composer
+layout. Use the moon/sun button at the top of the page to switch modes.
+The site starts with your system theme and remembers your choice in the local
+browser. No outside stylesheets, images, scripts, or new API calls are required.
+
+The composer preview is **visual only**: typing in it never sends a Telegram
+message. The actual protected workflow remains **Preview > review recipients >
+Send**; all original opt-in and delivery restrictions are unchanged.
+
 ## Technology
 
 FastAPI · Telethon 1.x · Jinja2 · Python 3.12 · SQLite · vanilla JavaScript/CSS · Docker Compose.

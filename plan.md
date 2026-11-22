@@ -29,3 +29,6 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [ ] Recreate only broadcaster service to apply new port mapping, then verify health from the public origin IP.
 - [ ] Set Cloudflare Tunnel origin for telegram-broadcaster.youssefdaoud.com to http://72.61.177.85:8789 and verify HTTPS login.
 - [ ] Apply firewall-origin restrictions; Cloudflare Access alone does not protect the direct IP:port.
+
+- [x] Build Telegram Web-inspired light/dark UI and chat composer preview (presentation only).
+- [ ] Confirm server Docker image rebuilt and HTML/CSS visible through public hostname after git pull.

@@ -1,8 +1,10 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light"><title>{{ title or "Dashboard" }} · Telegram Broadcaster</title>
+<meta name="color-scheme" content="light dark"><title>{{ title or "Dashboard" }} · Telegram Broadcaster</title>
 <link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/telegram-theme.css">
+<script src="/static/telegram-theme.js"></script>
 <script src="/static/app.js" defer></script>
 </head><body class="{% if not user %}auth-body{% else %}dashboard-body{% endif %}">
 {% if user %}
@@ -23,6 +25,7 @@
     <header class="topbar">
       <div class="crumbs">Workspace <span>/</span> <strong>{{ title or "Overview" }}</strong></div>
       <div class="topbar-right">
+        <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle day and night theme" aria-pressed="false">☾</button>
         {% if not send_enabled %}<span class="chip chip-amber"><span class="soft-dot"></span>Sending disabled</span>{% else %}<span class="chip chip-green"><span class="soft-dot"></span>Sending enabled</span>{% endif %}
         <span class="user-circle" title="{{ user['username'] }}"> {{ user['username'][:1]|upper }} </span>
         <form method="post" action="/logout" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="text-button" type="submit">Sign out</button></form>
@@ -35,6 +38,7 @@
   </div>
 </div>
 {% else %}
+<button type="button" class="theme-toggle theme-toggle-public" data-theme-toggle aria-label="Toggle day and night theme" aria-pressed="false">☾</button>
 {% block public_content %}{% endblock %}
 {% endif %}
 </body></html>

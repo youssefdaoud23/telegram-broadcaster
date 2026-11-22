@@ -74,6 +74,32 @@ class WebsiteTests(unittest.TestCase):
             self.assertEqual(response.headers["location"], "/")
             self.assertEqual(self.testclient.get("/").status_code, 200)
 
+    def test_telegram_theme_assets_and_composer_preview(self):
+        self.sign_in()
+        home = self.testclient.get("/")
+        self.assertEqual(home.status_code, 200)
+        self.assertIn("/static/telegram-theme.css", home.text)
+        self.assertIn("/static/telegram-theme.js", home.text)
+        self.assertIn("data-theme-toggle", home.text)
+        login = self.testclient.get("/login")
+        self.assertEqual(login.status_code, 200)
+        self.assertIn("data-theme-toggle", login.text)
+
+        stylesheet = self.testclient.get("/static/telegram-theme.css")
+        script = self.testclient.get("/static/telegram-theme.js")
+        self.assertEqual(stylesheet.status_code, 200)
+        self.assertEqual(script.status_code, 200)
+        self.assertIn("data-theme", stylesheet.text)
+        self.assertIn("telegram-broadcaster-theme", script.text)
+
+        compose = self.testclient.get("/compose")
+        self.assertEqual(compose.status_code, 200)
+        self.assertIn('class="panel tg-recipient-panel"', compose.text)
+        self.assertIn('class="panel tg-composer-panel"', compose.text)
+        self.assertIn('id="tg-message-preview-text"', compose.text)
+        self.assertIn('name="csrf"', compose.text)
+        self.assertIn('action="/compose/preview"', compose.text)
+
     def test_add_contact_and_import(self):
         csrf=self.sign_in()
         response=self.testclient.post("/contacts",data={

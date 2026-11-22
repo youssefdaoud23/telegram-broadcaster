@@ -3,7 +3,22 @@
 <div class="page-heading"><div><span class="eyebrow accent">PERSONAL TELEGRAM MESSAGING</span><h1>New broadcast</h1><p class="subtle">One message. Separate, private conversations with each recipient.</p></div></div>
 <form action="/compose/preview" method="post" class="onboard-grid compose-grid">
 <input type="hidden" name="csrf" value="{{ csrf }}">
-<section class="panel">
+<section class="panel tg-composer-panel">
+  <div class="tg-conversation-header">
+    <span class="tg-header-avatar" aria-hidden="true">✉</span>
+    <div>
+      <span class="tg-header-title" id="tg-preview-sender">Private message preview</span>
+      <span class="tg-header-subtitle">One private message per selected contact</span>
+    </div>
+  </div>
+  <div class="tg-chat-canvas" aria-label="Live message appearance preview">
+    <span class="tg-chat-stamp">Preview · not sent</span>
+    <div class="tg-chat-bubble">
+      <span id="tg-message-preview-text" class="tg-message-preview tg-message-placeholder">Your message will appear here as you type…</span>
+      <small class="tg-message-time">Draft · not sent</small>
+    </div>
+  </div>
+  <div class="tg-compose-inputs">
   <div class="field-section"><span class="step-number">01</span><div><h2>Sending account</h2><p class="subtle">Choose which of your connected accounts sends the message.</p></div></div>
   {% if accounts %}
     <label class="sr-only" for="account_id">Sending account</label>
@@ -14,8 +29,9 @@
   <div class="count-line"><span>Personal direct message · no group chat</span><span id="char-count">0 / 4096</span></div>
   <div class="form-actions"><button type="submit" class="btn btn-primary" {% if not accounts %}disabled{% endif %}>Preview broadcast <span>→</span></button><a href="/" class="btn btn-outline">Cancel</a></div>
   <div class="info-strip"><span>ℹ</span><p>Nothing is sent when you click Preview. You will review the exact recipients and press Send on the next screen.</p></div>
+  </div>
 </section>
-<section class="panel">
+<section class="panel tg-recipient-panel">
   <div class="field-section"><span class="step-number">03</span><div><h2>Choose recipients</h2><p class="subtle">Only enabled, opted-in contacts are shown.</p></div></div>
   <div class="recipient-tools"><label class="checkline"><input type="checkbox" id="select-all"> Select all eligible</label><span class="count-pill" id="selected-count">0 selected</span></div>
   <input type="search" id="recipient-search" placeholder="Filter recipients…" aria-label="Filter recipients">
