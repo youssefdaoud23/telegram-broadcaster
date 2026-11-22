@@ -466,7 +466,8 @@ class DirectGroupImportTests(unittest.TestCase):
             ).fetchone()[0],3)
         self.assertIn(f"/contacts/groups/{group['id']}",result.headers["location"])
         page=self.http.get(f"/contacts/groups/{group['id']}")
-        self.assertIn("3 selected",page.text)
+        self.assertIn("3 members",page.text)
+        self.assertIn("Add contacts",page.text)
 
     def test_group_csv_spreadsheet_formula_escape_roundtrips_name(self):
         self.make_scan(
