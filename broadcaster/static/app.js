@@ -69,6 +69,14 @@ document.addEventListener("DOMContentLoaded",()=>{
   const contactSearch=document.getElementById("contacts-filter-search");
   const contactGroup=document.getElementById("contacts-filter-group");
   const contactRows=[...document.querySelectorAll(".contact-filter-row")];
+  const foldContactSearch=value=>String(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase();
+  // Index once; large contact lists must not reparse every row on each key.
+  const indexedContacts=contactRows.map(row=>{
+    const text=foldContactSearch((row.getAttribute("data-contact-search")||"")+" "+row.textContent);
+    return {row,text,digits:text.replace(/[^0-9]/g,""),
+      groupIds:row.getAttribute("data-contact-groups")||"",
+      checkbox:row.querySelector(".bulk-contact-checkbox")};
+  });
   const contactResultCount=document.getElementById("contact-filter-count");
   const contactNoResults=document.getElementById("contacts-filter-empty");
   const contactFilterForm=document.querySelector(".contact-filter-bar");
@@ -94,22 +102,17 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   };
   const filterContacts=()=>{
-    const needle=contactSearch ? contactSearch.value.trim().toLocaleLowerCase() : "";
+    const needle=contactSearch ? foldContactSearch(contactSearch.value.trim()) : "";
     const digits=needle.replace(/[^0-9]/g,"");
     const group=contactGroup ? contactGroup.value : "0";
     let count=0;
-    for(const row of contactRows){
-      const haystack=((row.getAttribute("data-contact-search")||"")+" "+row.textContent).toLocaleLowerCase();
-      const groupIds=row.getAttribute("data-contact-groups")||"";
-      const matchText=(!needle||haystack.includes(needle)||
-        (digits.length>=3&&haystack.replace(/[^0-9]/g,"").includes(digits)));
-      const matchGroup=group==="0"||groupIds.includes("|"+group+"|");
-      row.hidden=!(matchText&&matchGroup);
-      if(!row.hidden)count++;
-      else {
-        const box=row.querySelector(".bulk-contact-checkbox");
-        if(box)box.checked=false; // Hidden selections must not affect bulk actions.
-      }
+    for(const item of indexedContacts){
+      const matchText=(!needle||item.text.includes(needle)||
+        (digits.length>=3&&item.digits.includes(digits)));
+      const matchGroup=group==="0"||item.groupIds.includes("|"+group+"|");
+      item.row.hidden=!(matchText&&matchGroup);
+      if(!item.row.hidden)count++;
+      else if(item.checkbox)item.checkbox.checked=false; // Never bulk-edit filtered-out contacts.
     }
     if(contactResultCount)contactResultCount.textContent=count+" of "+contactRows.length+" shown";
     if(contactNoResults)contactNoResults.hidden=count!==0||contactRows.length===0;
