@@ -109,14 +109,33 @@ only to already-created groups, while the **Telegram Group** column or the
 manually entered group name can create a new group. The original direct-import
 workflow remains preferred for new scans.
 
+## Live contact search and Active/Inactive controls
+
+The **Contacts** page displays a full-width contact table with separate
+**Telegram username**, **Phone number**, and **Telegram ID** columns. Phone
+numbers are displayed only when Telegram or a manual import supplied one;
+hidden numbers are never inferred or retrieved. Search filters name,
+username, phone, Telegram ID, notes, and group names as you type, without
+a page reload. Changing the group dropdown immediately updates results.
+Selecting all applies only to contacts currently shown; filtered-out
+selections are cleared for safety.
+
+A contact's **Active/Inactive** switch and the group-wide status buttons
+control its `enabled` flag. The selected-contact toolbar has the same
+actions. The change is owner-scoped and does not modify group memberships,
+message history, or the separate verified messaging permission requirement.
+An Active contact may still be ineligible for private broadcasts until
+the required permission is documented.
+
 ## Bulk consent, withdrawal, and contact removal
 
 You can manage many contacts at once without editing them individually:
 
 1. Open **Contacts**, optionally filter by a contact group, select several
    contacts or use **Select all visible**.
-2. To manage permission, enter a source/evidence note and choose **Record
-   verified opt-in** or **Withdraw consent**. Granting consent requires an
+2. To manage messaging permission, expand **Advanced messaging permission
+   controls**, enter a source/evidence note, and choose **Record verified
+   opt-in** or **Withdraw consent**. Granting consent requires an
    explicit checkbox confirming that *each selected person* has already
    agreed to private messages. Simply joining a Telegram group or importing
    the group is not evidence of messaging consent.
@@ -125,13 +144,14 @@ You can manage many contacts at once without editing them individually:
    their campaign and delivery history. Archived contacts are excluded from
    future broadcasts.
 
-To apply consent to everyone in a contact group, open **Contact groups**,
-choose a group, and use **Consent for the entire group**. The same evidence
-requirement applies to granting. Withdrawal works without an opt-in
-attestation, and it applies to the contact globally: a contact in several
-groups stops being eligible in all of them.
+To make an entire group Active or Inactive, open **Contact groups**,
+choose the group, and use its **Group Active status** controls.
+These controls do not establish messaging consent. For verified
+messaging-permission changes, select the relevant contacts in the
+Contacts table, open **Advanced messaging permission controls**, and
+provide the required direct opt-in evidence.
 
-**Consent history** on the Contacts page lists recent bulk changes, the
+**View permission history** under the advanced controls lists recent bulk changes, the
 operator who made them, timestamps, and the recorded evidence or withdrawal
 reason. Historical consent values entered before this feature do not gain
 retroactive audit records. New records are owner-scoped in SQLite.
