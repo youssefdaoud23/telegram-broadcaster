@@ -36,6 +36,59 @@ def _data_for_member(member: group_export.ExportMember) -> dict[str, str]:
     return core.normalize_contact(name, username, phone, user_id, "Imported from Telegram group scan")
 
 
+def import_contact_record(
+    db: sqlite3.Connection, data: dict[str, str], owner_id: int,
+    group_ids: list[int], *, consent: bool = False, enabled: bool = True,
+) -> tuple[bool, int]:
+    """Add or safely reuse a contact, attaching only the requested groups.
+
+    Returns (created, new_group_links). A caller-managed savepoint must roll
+    back validation failures. Existing flags, notes and other memberships
+    are never changed; archived or conflicting records cannot be revived.
+    """
+    core._allowed_group_ids(db, owner_id, group_ids)
+    matches = db.execute("""
+        SELECT id,username,phone,user_id,archived FROM contacts
+        WHERE owner_id=? AND
+        ((?<>'' AND user_id=?) OR
+         (?<>'' AND username=? COLLATE NOCASE) OR
+         (?<>'' AND phone=?))
+    """, (owner_id, data["user_id"], data["user_id"],
+          data["username"], data["username"],
+          data["phone"], data["phone"])).fetchall()
+    if len(matches) > 1:
+        raise ValueError("Conflicting contact identifiers")
+    if matches:
+        existing = matches[0]
+        if existing["archived"]:
+            raise ValueError("An archived contact must not be resurrected")
+        for field in ("user_id", "username", "phone"):
+            if (existing[field] and data[field] and
+                    existing[field].casefold() != data[field].casefold()):
+                raise ValueError(f"Existing contact has a conflicting {field}")
+        contact_id = existing["id"]
+        # Only fill a missing Telegram numeric ID when another identifier
+        # safely matched. Do not overwrite identity, consent or enabled.
+        if data["user_id"] and not existing["user_id"]:
+            db.execute(
+                "UPDATE contacts SET user_id=?,updated_at=? "
+                "WHERE id=? AND owner_id=? AND user_id=''",
+                (data["user_id"], core.now(), contact_id, owner_id),
+            )
+    else:
+        contact_id = core.insert_contact(
+            db, data, owner_id, consent=consent, enabled=enabled,
+        )
+    added_links = 0
+    for group_id in sorted(group_ids):
+        result = db.execute(
+            "INSERT OR IGNORE INTO contact_group_members(group_id,contact_id,added_at) "
+            "VALUES (?,?,?)", (group_id, contact_id, core.now()),
+        )
+        added_links += result.rowcount
+    return not bool(matches), added_links
+
+
 def import_scan_members(db: sqlite3.Connection, scan: group_export.GroupScan,
                         owner_id: int, group_name: str) -> ImportSummary:
     """Create/reuse a group and link members without altering opt-in flags."""
@@ -59,54 +112,15 @@ def import_scan_members(db: sqlite3.Connection, scan: group_export.GroupScan,
         db.execute("SAVEPOINT telegram_group_import_member")
         try:
             data = _data_for_member(member)
-            matches = db.execute("""
-                SELECT id, username, phone, user_id, archived FROM contacts
-                WHERE owner_id=? AND
-                ((?<>'' AND user_id=?) OR (?<>'' AND username=?) OR (?<>'' AND phone=?))
-            """, (owner_id, data["user_id"], data["user_id"],
-                  data["username"], data["username"],
-                  data["phone"], data["phone"])).fetchall()
-            if len(matches) > 1:
-                raise ValueError("Conflicting contact identifiers")
-            if matches:
-                existing = matches[0]
-                if existing["archived"]:
-                    raise ValueError("An archived contact must not be resurrected")
-                if (existing["user_id"] and data["user_id"]
-                        and existing["user_id"] != data["user_id"]):
-                    raise ValueError("Telegram user ID conflicts with an existing contact")
-                if (existing["username"] and data["username"]
-                        and existing["username"] != data["username"]):
-                    raise ValueError("Telegram username conflicts with an existing contact")
-                if (existing["phone"] and data["phone"]
-                        and existing["phone"] != data["phone"]):
-                    raise ValueError("Phone number conflicts with an existing contact")
-                contact_id = existing["id"]
-                # On a recognized contact, add only the missing verified
-                # Telegram ID. Never overwrite existing fields or opt-in.
-                if data["user_id"] and not existing["user_id"]:
-                    db.execute(
-                        "UPDATE contacts SET user_id=?,updated_at=? "
-                        "WHERE id=? AND owner_id=? AND user_id=''",
-                        (data["user_id"], core.now(), contact_id, owner_id),
-                    )
-            else:
-                contact_id = core.insert_contact(
-                    db, data, owner_id, consent=False, enabled=True,
-                )
-            before = db.total_changes
-            db.execute(
-                "INSERT OR IGNORE INTO contact_group_members(group_id,contact_id,added_at) "
-                "VALUES (?,?,?)", (group_id, contact_id, core.now()),
+            is_new, new_links = import_contact_record(
+                db, data, owner_id, [group_id], consent=False, enabled=True,
             )
-            added_link = db.total_changes > before
-            if matches:
-                if added_link:
-                    linked_existing += 1
-                else:
-                    already += 1
-            else:
+            if is_new:
                 created += 1
+            elif new_links:
+                linked_existing += 1
+            else:
+                already += 1
             db.execute("RELEASE SAVEPOINT telegram_group_import_member")
         except (ValueError, sqlite3.IntegrityError):
             db.execute("ROLLBACK TO SAVEPOINT telegram_group_import_member")
