@@ -255,6 +255,132 @@ class BulkConsentTests(unittest.TestCase):
         self.assertIn("Set entire group Inactive",page.text)
         self.assertNotIn("Consent for the entire group",page.text)
 
+    def test_live_contact_filter_indexes_phone_username_id_notes_and_groups(self):
+        with core.database() as db:
+            cid=core.insert_contact(
+                db,core.normalize_contact(
+                    "Phone Customer","@phone_user_123","+420777123456",
+                    "678901234","Imported from source group",
+                ),self.owner,consent=False,
+            )
+            gid=core.add_contact_group(db,self.owner,"Prague Customers")
+            core.set_contact_groups(db,self.owner,cid,[gid])
+            db.commit()
+        page=self.client.get(f"/contacts?group_id={gid}&q=777")
+        self.assertEqual(page.status_code,200)
+        for snippet in (
+            'id="contacts-filter-search"', 'id="contacts-filter-group"',
+            'data-contact-search=', 'data-contact-groups=', 'data-contact-groups="|'+str(gid)+'|"',
+            'Phone number', '+420777123456', '@phone_user_123',
+            '678901234', 'Imported from source group', 'contacts-grid-wide',
+        ):
+            self.assertIn(snippet,page.text)
+        self.assertIn(f'<option value="{gid}" selected>',page.text)
+        js=self.client.get("/static/app.js").text
+        self.assertIn('contactSearch.addEventListener("input",filterContacts)',js)
+        self.assertIn('contactGroup.addEventListener("change",filterContacts)',js)
+        self.assertIn('event.preventDefault()',js)
+        self.assertIn('if(box)box.checked=false',js)
+        group=self.client.get(f"/contacts/groups/{gid}")
+        self.assertIn("Phone: ",group.text)
+        self.assertIn("+420777123456",group.text)
+        self.assertIn("Telegram ID: 678901234",group.text)
+
+    def test_individual_active_switch_preserves_consent_and_owner_isolation(self):
+        own=self.contact("Owner","@own_status_1",consent=True)
+        foreign=self.contact("Foreign","@foreign_status1",owner=self.other)
+        group=self.group("Selected Group")
+        self.membership(own,[group])
+        page=self.client.get(f"/contacts/groups/{group}")
+        self.assertIn(f'formaction="/contacts/{own}/status"',page.text)
+        deactivate=self.client.post(
+            f"/contacts/{own}/status",
+            data={"csrf":self.csrf,"action":"deactivate","group_id":str(group)},
+            follow_redirects=False,
+        )
+        self.assertEqual(deactivate.status_code,303)
+        self.assertIn(f"/contacts/groups/{group}",deactivate.headers["location"])
+        with core.database() as db:
+            row=db.execute("SELECT enabled,consent FROM contacts WHERE id=?",(own,)).fetchone()
+            self.assertEqual(tuple(row),(0,1))
+        activate=self.client.post(
+            f"/contacts/{own}/status",data={"csrf":self.csrf,"action":"activate"},
+            follow_redirects=False,
+        )
+        self.assertEqual(activate.status_code,303)
+        with core.database() as db:
+            self.assertEqual(tuple(db.execute(
+                "SELECT enabled,consent FROM contacts WHERE id=?",(own,)
+            ).fetchone()),(1,1))
+        invalid=self.client.post(
+            f"/contacts/{foreign}/status",data={"csrf":self.csrf,"action":"deactivate"},
+            follow_redirects=False,
+        )
+        self.assertEqual(invalid.status_code,303)
+        blocked=self.client.post(
+            f"/contacts/{own}/status",data={"csrf":"wrong","action":"deactivate"},
+            follow_redirects=False,
+        )
+        self.assertEqual(blocked.status_code,403)
+        with core.database() as db:
+            self.assertEqual(db.execute(
+                "SELECT enabled FROM contacts WHERE id=?",(foreign,)
+            ).fetchone()[0],1)
+            self.assertEqual(db.execute(
+                "SELECT enabled FROM contacts WHERE id=?",(own,)
+            ).fetchone()[0],1)
+
+    def test_group_and_selected_active_controls_do_not_grant_opt_in(self):
+        group=self.group("Target List")
+        other_group=self.group("Other List")
+        alice=self.contact("Alice","@active_alice",consent=True,enabled=False)
+        bob=self.contact("Bob","@active_bobby",consent=False,enabled=False)
+        unrelated=self.contact("Other","@active_other",consent=False,enabled=False)
+        self.membership(alice,[group,other_group])
+        self.membership(bob,[group])
+        changed=self.client.post(
+            f"/contacts/groups/{group}/status",
+            data={"csrf":self.csrf,"action":"activate"},
+            follow_redirects=False,
+        )
+        self.assertEqual(changed.status_code,303)
+        with core.database() as db:
+            status={r["id"]:(r["enabled"],r["consent"]) for r in db.execute(
+                "SELECT id,enabled,consent FROM contacts WHERE owner_id=?",(self.owner,)
+            )}
+            self.assertEqual(status[alice],(1,1))
+            self.assertEqual(status[bob],(1,0))
+            self.assertEqual(status[unrelated],(0,0))
+            self.assertEqual(core.contact_group_map(db,self.owner)[alice],{group,other_group})
+        selected=self.client.post(
+            "/contacts/bulk-status",
+            data={"csrf":self.csrf,"action":"deactivate",
+                  "contacts":[str(alice),str(bob)]},
+            follow_redirects=False,
+        )
+        self.assertEqual(selected.status_code,303)
+        with core.database() as db:
+            self.assertEqual(tuple(db.execute(
+                "SELECT enabled,consent FROM contacts WHERE id=?",(alice,)
+            ).fetchone()),(0,1))
+            self.assertEqual(tuple(db.execute(
+                "SELECT enabled,consent FROM contacts WHERE id=?",(bob,)
+            ).fetchone()),(0,0))
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM contact_consent_events WHERE owner_id=?",
+                (self.owner,),
+            ).fetchone()[0],0)
+        invalid=self.client.post(
+            "/contacts/bulk-status",
+            data={"csrf":self.csrf,"action":"activate",
+                  "contacts":[str(alice),str(unrelated),str(alice)]},
+            follow_redirects=False,
+        )
+        self.assertEqual(invalid.status_code,303)
+        with core.database() as db:
+            self.assertEqual(db.execute("SELECT enabled FROM contacts WHERE id=?",
+                                        (alice,)).fetchone()[0],0)
+
     def test_consent_updates_affect_queued_and_drafted_targets(self):
         a=self.contact("Alice","@bulk_alice1",consent=True)
         with core.database() as db:
