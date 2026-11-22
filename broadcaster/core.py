@@ -141,7 +141,7 @@ def decrypt(value: str) -> str:
 
 
 def password_digest(password: str, salt: bytes) -> str:
-    return hashlib.scrypt(password.encode("utf8"), salt=salt, n=2**15, r=8, p=1, maxmem=64*1024*1024).hex()
+    return hashlib.scrypt(password.encode("utf8"), salt=salt, n=2**15, r=8, p=1).hex()
 
 
 def create_admin(username: str, password: str) -> None:
