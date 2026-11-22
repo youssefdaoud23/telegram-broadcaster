@@ -348,9 +348,9 @@ class DirectGroupImportTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
 
     def test_explicit_csv_group_and_flags_are_idempotent(self):
-        raw=("Name,Username,Enabled,Opt In\\n"
-             "Disabled,@disabled_csv_1,no,no\\n"
-             "Opted In,@enabled_csv_1,yes,yes\\n").encode()
+        raw=("Name,Username,Enabled,Opt In\n"
+             "Disabled,@disabled_csv_1,no,no\n"
+             "Opted In,@enabled_csv_1,yes,yes\n").encode()
         for _ in range(2):
             result=self.http.post(
                 "/contacts/import",
@@ -374,8 +374,8 @@ class DirectGroupImportTests(unittest.TestCase):
         self.assertIn("already",result.headers["location"])
 
     def test_csv_over_thousand_rows_is_not_silently_truncated(self):
-        raw="Name,Telegram User ID,Telegram Group\\n"+"".join(
-            f"Person {i},{500000000+i},Big Group\\n" for i in range(1001)
+        raw="Name,Telegram User ID,Telegram Group\n"+"".join(
+            f"Person {i},{500000000+i},Big Group\n" for i in range(1001)
         )
         response=self.http.post(
             "/contacts/import",data={"csrf":self.csrf},
@@ -390,8 +390,8 @@ class DirectGroupImportTests(unittest.TestCase):
         self.assertIn("Imported%201001%20contacts",response.headers["location"])
 
     def test_csv_exceeding_safety_limit_rejects_without_writes(self):
-        raw="Name,Telegram User ID\\n"+"".join(
-            f"Person {i},{500000000+i}\\n" for i in range(5001)
+        raw="Name,Telegram User ID\n"+"".join(
+            f"Person {i},{500000000+i}\n" for i in range(5001)
         )
         response=self.http.post(
             "/contacts/import",data={"csrf":self.csrf,"group_name":"Would Not Exist"},
@@ -413,8 +413,8 @@ class DirectGroupImportTests(unittest.TestCase):
             )
             db.execute("UPDATE contacts SET archived=1 WHERE id=?",(old,))
             db.commit()
-        raw=("Name,Username,Telegram User ID,Telegram Group\\n"
-             "Archived,@archived_user1,123456789,Should Not Be Created\\n")
+        raw=("Name,Username,Telegram User ID,Telegram Group\n"
+             "Archived,@archived_user1,123456789,Should Not Be Created\n")
         response=self.http.post(
             "/contacts/import",data={"csrf":self.csrf},
             files={"file":("archived.csv",raw.encode(),"text/csv")},
@@ -425,9 +425,9 @@ class DirectGroupImportTests(unittest.TestCase):
         with core.database() as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contact_groups").fetchone()[0],0)
-            self.assertEqual(db.execute(
+            self.assertEqual(tuple(db.execute(
                 "SELECT archived,enabled,consent FROM contacts WHERE id=?",(old,)
-            ).fetchone(),(1,0,1))
+            ).fetchone()),(1,0,1))
 
 
 if __name__=="__main__":
