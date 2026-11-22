@@ -130,13 +130,48 @@ CREATE TABLE IF NOT EXISTS campaign_retries (
 
 
 def init_db(*, recover_inflight: bool = False) -> None:
-    """Create schema. Only app startup may interrupt orphaned in-flight campaigns.
+    """Initialize and migrate owner-scoped data; only server startup recovers sends.
 
-    CLI operations must not change active campaign state while the web service
-    is running. Never automatically retry uncertain Telegram deliveries.
+    Existing Telegram accounts, contacts, and campaigns belong to the oldest
+    administrator. The migration is additive and repeatable. A second admin
+    never inherits the original owner's records.
     """
     with database() as db:
         db.executescript(SCHEMA)
+        db.execute("BEGIN IMMEDIATE")
+        admin_columns = {row["name"] for row in db.execute("PRAGMA table_info(admins)")}
+        if "role" not in admin_columns:
+            db.execute("ALTER TABLE admins ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+        if "active" not in admin_columns:
+            db.execute("ALTER TABLE admins ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+        owners = db.execute("SELECT id FROM admins WHERE role='owner' ORDER BY id").fetchall()
+        if not owners:
+            first = db.execute(
+                "SELECT id FROM admins ORDER BY created_at,id LIMIT 1"
+            ).fetchone()
+            if first:
+                db.execute("UPDATE admins SET role='owner' WHERE id=?", (first["id"],))
+        owner = db.execute(
+            "SELECT id FROM admins WHERE role='owner' ORDER BY id LIMIT 1"
+        ).fetchone()
+        for table in ("accounts", "contacts", "campaigns"):
+            columns = {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}
+            legacy_table = "owner_id" not in columns
+            if legacy_table:
+                db.execute(f"ALTER TABLE {table} ADD COLUMN owner_id INTEGER REFERENCES admins(id)")
+                if owner:
+                    # Only the original single-user rows are assigned to the owner.
+                    db.execute(
+                        f"UPDATE {table} SET owner_id=? WHERE owner_id IS NULL",
+                        (owner["id"],),
+                    )
+            # Never silently assign newly ownerless records to the first user
+            # on later restarts: that could expose another person's data.
+            if db.execute(f"SELECT 1 FROM {table} WHERE owner_id IS NULL LIMIT 1").fetchone():
+                raise RuntimeError(f"{table} contains ownerless records; migration stopped safely")
+            db.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{table}_owner ON {table}(owner_id)"
+            )
         if recover_inflight:
             # On a single-worker service startup, previous delivery tasks are gone.
             # Mark them interrupted to prevent duplicate sends on restart.
@@ -175,22 +210,63 @@ def password_digest(password: str, salt: bytes) -> str:
 
 
 def create_admin(username: str, password: str) -> None:
+    """Create first owner or subsequent isolated user (CLI compatibility)."""
+    init_db()
+    with database() as db:
+        create_user(db, username, password, initial_owner=True)
+        db.commit()
+
+
+def create_user(db: sqlite3.Connection, username: str, password: str,
+                *, initial_owner: bool = False) -> int:
     username = username.strip()
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{2,39}", username):
-        raise ValueError("Administrator username must be 3–40 characters")
+        raise ValueError("Username must be 3–40 characters, starting with a letter")
     if not password:
-        raise ValueError("Administrator password cannot be empty")
-    init_db()
+        raise ValueError("Password cannot be empty")
+    has_users = db.execute("SELECT 1 FROM admins LIMIT 1").fetchone() is not None
+    if not has_users and not initial_owner:
+        raise ValueError("Create the installation owner before adding users")
+    role = "owner" if initial_owner and not has_users else "user"
     salt = secrets.token_bytes(16)
-    with database() as db:
-        try:
-            db.execute(
-                "INSERT INTO admins(username,password_salt,password_digest,created_at) VALUES (?,?,?,?)",
-                (username, salt.hex(), password_digest(password, salt), now()),
-            )
-        except sqlite3.IntegrityError as exc:
-            raise ValueError("Administrator already exists. Sign in or use reset-admin-password.") from exc
-        db.commit()
+    try:
+        cursor = db.execute(
+            "INSERT INTO admins(username,password_salt,password_digest,created_at,role,active) "
+            "VALUES (?,?,?,?,?,1)",
+            (username, salt.hex(), password_digest(password, salt), now(), role),
+        )
+    except sqlite3.IntegrityError as exc:
+        raise ValueError("Username already exists. Sign in or reset the password.") from exc
+    return int(cursor.lastrowid)
+
+
+def change_password(db: sqlite3.Connection, user_id: int, new_password: str,
+                    *, current_password: str | None = None) -> None:
+    if not new_password:
+        raise ValueError("Password cannot be empty")
+    user = db.execute("SELECT * FROM admins WHERE id=? AND active=1", (user_id,)).fetchone()
+    if not user:
+        raise ValueError("User not found or disabled")
+    if current_password is not None and not validate_password(user, current_password):
+        raise ValueError("Current password is incorrect")
+    salt = secrets.token_bytes(16)
+    db.execute(
+        "UPDATE admins SET password_salt=?,password_digest=? WHERE id=?",
+        (salt.hex(), password_digest(new_password, salt), user_id),
+    )
+    db.execute("DELETE FROM sessions WHERE admin_id=?", (user_id,))
+    db.execute("DELETE FROM login_attempts WHERE username=?", (user["username"].lower(),))
+
+
+def set_user_active(db: sqlite3.Connection, user_id: int, active: bool) -> None:
+    user=db.execute("SELECT role FROM admins WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        raise ValueError("User not found")
+    if user["role"]=="owner":
+        raise ValueError("Owner account cannot be disabled")
+    db.execute("UPDATE admins SET active=? WHERE id=?", (int(active),user_id))
+    if not active:
+        db.execute("DELETE FROM sessions WHERE admin_id=?", (user_id,))
 
 
 def reset_admin_password(username: str, password: str) -> None:
@@ -259,9 +335,9 @@ def session(db: sqlite3.Connection, raw: str | None) -> sqlite3.Row | None:
         return None
     digest = hashlib.sha256(raw.encode()).hexdigest()
     return db.execute("""
-        SELECT s.token_hash,s.admin_id,s.csrf,s.expires_at,a.username
+        SELECT s.token_hash,s.admin_id,s.csrf,s.expires_at,a.username,a.role,a.active
         FROM sessions s JOIN admins a ON a.id=s.admin_id
-        WHERE s.token_hash=? AND s.expires_at>?
+        WHERE s.token_hash=? AND s.expires_at>? AND a.active=1
     """, (digest, now())).fetchone()
 
 
@@ -300,30 +376,31 @@ def destination(row: sqlite3.Row | dict) -> str:
     return row["username"] or row["phone"] or row["user_id"]
 
 
-def active_contact_rows(db: sqlite3.Connection) -> list[sqlite3.Row]:
+def active_contact_rows(db: sqlite3.Connection, owner_id: int) -> list[sqlite3.Row]:
     return db.execute(
-        "SELECT * FROM contacts WHERE archived=0 ORDER BY name COLLATE NOCASE,id"
+        "SELECT * FROM contacts WHERE owner_id=? AND archived=0 ORDER BY name COLLATE NOCASE,id",
+        (owner_id,),
     ).fetchall()
 
 
-def insert_contact(db: sqlite3.Connection, data: dict[str,str], *, consent: bool=False, enabled: bool=True) -> int:
+def insert_contact(db: sqlite3.Connection, data: dict[str,str], owner_id: int, *, consent: bool=False, enabled: bool=True) -> int:
     dest = data["username"] or data["phone"] or data["user_id"]
     # De-duplicate by any supplied identifier, case insensitive for usernames.
     dup = db.execute("""
-        SELECT id FROM contacts WHERE archived=0 AND
+        SELECT id FROM contacts WHERE owner_id=? AND archived=0 AND
         ((?<>'' AND username=?) OR (?<>'' AND phone=?) OR (?<>'' AND user_id=?))
-    """, (data["username"],data["username"],data["phone"],data["phone"],data["user_id"],data["user_id"])).fetchone()
+    """, (owner_id,data["username"],data["username"],data["phone"],data["phone"],data["user_id"],data["user_id"])).fetchone()
     if dup:
         raise ValueError("This Telegram identifier is already present in your contacts")
     cursor = db.execute("""
-        INSERT INTO contacts(name,username,phone,user_id,notes,enabled,consent,created_at,updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?)
+        INSERT INTO contacts(name,username,phone,user_id,notes,enabled,consent,created_at,updated_at,owner_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
     """, (data["name"],data["username"],data["phone"],data["user_id"],data["notes"],
-          int(enabled), int(consent), now(), now()))
+          int(enabled), int(consent), now(), now(), owner_id))
     return int(cursor.lastrowid)
 
 
-def create_campaign(db: sqlite3.Connection, account_id: str, message: str, contact_ids: list[int], limit: int | None) -> str:
+def create_campaign(db: sqlite3.Connection, account_id: str, message: str, contact_ids: list[int], limit: int | None, owner_id: int) -> str:
     if len(message.strip()) < 1 or len(message) > 4096:
         raise ValueError("Message must contain 1–4096 characters")
     if not contact_ids:
@@ -332,19 +409,19 @@ def create_campaign(db: sqlite3.Connection, account_id: str, message: str, conta
         raise ValueError(f"Select no more than {limit} opted-in recipients")
     if len(contact_ids) != len(set(contact_ids)):
         raise ValueError("Recipients cannot be duplicated")
-    account = db.execute("SELECT * FROM accounts WHERE id=? AND state='connected'", (account_id,)).fetchone()
+    account = db.execute("SELECT * FROM accounts WHERE id=? AND state='connected' AND owner_id=?", (account_id,owner_id)).fetchone()
     if not account:
         raise ValueError("Please connect a Telegram sender first")
     eligible=[]
     for cid in contact_ids:
-        c=db.execute("SELECT * FROM contacts WHERE id=? AND archived=0 AND enabled=1 AND consent=1", (cid,)).fetchone()
+        c=db.execute("SELECT * FROM contacts WHERE id=? AND owner_id=? AND archived=0 AND enabled=1 AND consent=1", (cid,owner_id)).fetchone()
         if not c:
             raise ValueError("A selected contact is disabled or has not opted in")
         eligible.append(c)
     campaign_id=secrets.token_urlsafe(18)
     db.execute(
-        "INSERT INTO campaigns(id,account_id,message,state,created_at,total) VALUES (?,?,?,'draft',?,?)",
-        (campaign_id, account_id, message, now(), len(eligible)),
+        "INSERT INTO campaigns(id,account_id,message,state,created_at,total,owner_id) VALUES (?,?,?,'draft',?,?,?)",
+        (campaign_id, account_id, message, now(), len(eligible), owner_id),
     )
     for c in eligible:
         db.execute("""INSERT INTO deliveries(campaign_id,contact_id,name,destination,state,updated_at)
@@ -353,27 +430,30 @@ def create_campaign(db: sqlite3.Connection, account_id: str, message: str, conta
     return campaign_id
 
 
-def campaign_summary(db: sqlite3.Connection, campaign_id: str) -> tuple[sqlite3.Row | None,list[sqlite3.Row]]:
+def campaign_summary(db: sqlite3.Connection, campaign_id: str, owner_id: int) -> tuple[sqlite3.Row | None,list[sqlite3.Row]]:
     c=db.execute("""
         SELECT c.*,a.label AS account_label,a.username AS account_username
-        FROM campaigns c JOIN accounts a ON a.id=c.account_id WHERE c.id=?
-    """, (campaign_id,)).fetchone()
-    d=db.execute("SELECT * FROM deliveries WHERE campaign_id=? ORDER BY id", (campaign_id,)).fetchall()
+        FROM campaigns c JOIN accounts a ON a.id=c.account_id AND a.owner_id=c.owner_id
+        WHERE c.id=? AND c.owner_id=?
+    """, (campaign_id, owner_id)).fetchone()
+    d=(db.execute("SELECT * FROM deliveries WHERE campaign_id=? ORDER BY id", (campaign_id,)).fetchall()
+       if c is not None else [])
     return c,d
 
-def retryable_count(db: sqlite3.Connection, source_id: str) -> int:
+def retryable_count(db: sqlite3.Connection, source_id: str, owner_id: int) -> int:
     """Only never-started, currently opted-in recipients can be retried."""
     row = db.execute("""
         SELECT COUNT(*) AS count
         FROM deliveries d
-        JOIN contacts c ON c.id=d.contact_id
-        WHERE d.campaign_id=? AND d.state='pending'
+        JOIN campaigns p ON p.id=d.campaign_id
+        JOIN contacts c ON c.id=d.contact_id AND c.owner_id=p.owner_id
+        WHERE d.campaign_id=? AND p.owner_id=? AND d.state='pending'
           AND c.archived=0 AND c.enabled=1 AND c.consent=1
-    """, (source_id,)).fetchone()
+    """, (source_id, owner_id)).fetchone()
     return int(row["count"])
 
 
-def create_retry_draft(db: sqlite3.Connection, source_id: str, limit: int | None) -> tuple[str, bool]:
+def create_retry_draft(db: sqlite3.Connection, source_id: str, limit: int | None, owner_id: int) -> tuple[str, bool]:
     """Create at most one reviewed draft for an interrupted campaign.
 
     Never retry sent, unknown, sending, failed or blocked results because their
@@ -382,7 +462,7 @@ def create_retry_draft(db: sqlite3.Connection, source_id: str, limit: int | None
     """
     db.execute("BEGIN IMMEDIATE")
     source = db.execute(
-        "SELECT id,account_id,message,state FROM campaigns WHERE id=?", (source_id,)
+        "SELECT id,account_id,message,state FROM campaigns WHERE id=? AND owner_id=?", (source_id,owner_id)
     ).fetchone()
     if source is None:
         raise ValueError("Original broadcast not found")
@@ -397,11 +477,11 @@ def create_retry_draft(db: sqlite3.Connection, source_id: str, limit: int | None
 
     eligible = db.execute("""
         SELECT d.contact_id FROM deliveries d
-        JOIN contacts c ON c.id=d.contact_id
+        JOIN contacts c ON c.id=d.contact_id AND c.owner_id=?
         WHERE d.campaign_id=? AND d.state='pending'
           AND c.archived=0 AND c.enabled=1 AND c.consent=1
         ORDER BY d.id
-    """, (source_id,)).fetchall()
+    """, (owner_id,source_id)).fetchall()
     ids = [int(d["contact_id"]) for d in eligible]
     if not ids:
         raise ValueError(
@@ -414,7 +494,7 @@ def create_retry_draft(db: sqlite3.Connection, source_id: str, limit: int | None
             f"per-broadcast limit is {limit}. Increase SEND_MAX_RECIPIENTS or "
             "create a smaller broadcast manually."
         )
-    retry_id = create_campaign(db, source["account_id"], source["message"], ids, limit)
+    retry_id = create_campaign(db, source["account_id"], source["message"], ids, limit, owner_id)
     db.execute(
         "INSERT INTO campaign_retries(source_campaign_id,retry_campaign_id,created_at) VALUES (?,?,?)",
         (source_id, retry_id, now()),

@@ -99,9 +99,73 @@ PY
 
    For small initial tests you can optionally set SEND_MAX_RECIPIENTS=3 in your private .env. If omitted, the application itself imposes no fixed recipient count per broadcast; Telegram's restrictions and practical delivery time still apply.
 
+## Multiple people, separate private workspaces
+
+One website serves multiple users without mixing their Telegram accounts or
+contacts. The installation owner signs in and opens **User management** on
+the left navigation to create a new user. Enter their username and an initial
+non-empty password; share that password privately. **Do not give others the
+installation owner's login.**
+
+Each user then signs in at the same HTTPS hostname, opens **Telegram accounts**,
+and connects their own Telegram identity using their own API ID/Hash, phone,
+code and optional Telegram two-step password. Contact lists, exports, broadcasts,
+campaign history, connected account choices and retry drafts are scoped to the
+currently logged-in user, including backend access to guessed direct URLs.
+Even the installation owner cannot view other users' Telegram data in the
+website; the owner only sees usernames and whether access is active.
+
+The installation owner can **disable or re-enable** other users and **reset
+their broadcaster passwords** from User management. A reset requires entering
+the owner's current password again. Disabling a user immediately invalidates
+their web sessions and prevents future sends from continuing past the next
+worker authorization check. A message already in flight may finish.
+
+Every user, including the installation owner, can use **Change password** in
+the sidebar. This requires their current password, signs out all their
+existing website sessions, and leaves connected Telegram accounts and history
+intact. **This changes only the website login, not a Telegram password.**
+
+### Upgrade an existing single-user installation (important)
+
+The migration is **additive**: existing admin accounts stay in place and new
+`owner_id` fields are populated in accounts, contacts and campaigns.
+Existing Telegram session filenames, SQLite IDs, credentials, messages and
+delivery statuses are preserved. The oldest preexisting admin becomes the
+installation owner and receives all historical data. Any other preexisting
+admin is made a regular user, starting with no legacy records. If several
+people previously shared a database, there is no safe automated way to infer
+their separate ownership of historical records.
+
+Before deploying this schema change, **back up the live database using SQLite's
+consistent online backup method**. With the broadcaster running and with no
+active sends, run from the server:
+
+~~~bash
+cd /root/n8n/telegram-broadcaster
+docker compose exec -T broadcaster python -c 'import sqlite3; s=sqlite3.connect("/data/broadcaster.sqlite3"); d=sqlite3.connect("/data/broadcaster.sqlite3.pre-multiuser-backup"); s.backup(d); d.close(); s.close(); print("SQLite database backup complete")'
+docker compose up -d --build
+docker compose ps
+curl -fsS http://127.0.0.1:8789/health
+~~~
+
+Do not run the deployment while any broadcast is in progress: on startup the
+application deliberately marks orphaned queued or sending campaigns
+`interrupted` rather than automatically retrying them. Do not delete
+`data/` or overwrite `.env`. Its encryption key and Telegram session files
+are still needed to access existing accounts. This migration is tested
+against a synthetic copy of the original schema, but the live database must
+be backed up independently.
+
+Only the broadcaster Compose project is rebuilt; n8n, the legacy Telegram
+bridge and other Docker projects remain unchanged.
+
 ## Administrator account management
 
-Run `create-admin` only once for each new administrator username. If `admin` already exists, **do not create another administrator or delete the SQLite database**. Sign in with the existing credentials or reset its password in the trusted server terminal:
+Use **User management** to create additional private users after upgrading.
+The CLI `create-admin` is retained for bootstrap and troubleshooting; only
+the very first admin becomes the installation owner, subsequent CLI accounts
+are ordinary private users. Run `create-admin` only once for each username. If `admin` already exists, **do not create another administrator or delete the SQLite database**. Sign in with the existing credentials or reset its password in the trusted server terminal:
 
 ~~~bash
 cd /root/n8n/telegram-broadcaster

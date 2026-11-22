@@ -13,6 +13,11 @@ class PersistenceTests(unittest.TestCase):
         os.environ["DATABASE_PATH"]=str(Path(self.temp.name)/"test.sqlite3")
         os.environ["APP_ENCRYPTION_KEY"]=Fernet.generate_key().decode()
         core.init_db()
+        core.create_admin("fixture-owner", "fixture-password")
+        with core.database() as db:
+            self.owner_id=db.execute(
+                "SELECT id FROM admins WHERE username='fixture-owner'"
+            ).fetchone()["id"]
     def tearDown(self):
         for k,v in self.old.items():
             if v is None:os.environ.pop(k,None)
@@ -27,7 +32,7 @@ class PersistenceTests(unittest.TestCase):
     def test_password_hash_not_plaintext(self):
         core.create_admin("joe-admin","a long strong password!123")
         with core.database() as db:
-            row=db.execute("SELECT * FROM admins").fetchone()
+            row=db.execute("SELECT * FROM admins WHERE username=?",("joe-admin",)).fetchone()
             self.assertTrue(core.validate_password(row,"a long strong password!123"))
             self.assertFalse(core.validate_password(row,"another_password"))
             self.assertNotIn("password",row["password_digest"])
@@ -79,12 +84,12 @@ class PersistenceTests(unittest.TestCase):
         entry=core.normalize_contact(" Alice ","Alice_12345","","","intro")
         self.assertEqual(entry["username"],"@alice_12345")
         with core.database() as db:
-            cid=core.insert_contact(db,entry)
+            cid=core.insert_contact(db,entry, owner_id=self.owner_id)
             db.commit()
             c=db.execute("SELECT * FROM contacts WHERE id=?",(cid,)).fetchone()
             self.assertEqual(c["consent"],0)
             with self.assertRaises(ValueError):
-                core.insert_contact(db,entry)
+                core.insert_contact(db,entry, owner_id=self.owner_id)
 
     def test_reject_invalid_identifier(self):
         for name,username,phone,uid in [
@@ -105,22 +110,23 @@ class PersistenceTests(unittest.TestCase):
                    VALUES(?,?,?,?,?,?,?,'connected',?,?)""",
                 (uid,"Test",123456,core.encrypt("hash"),core.encrypt("+420123456789"),"@sender",uid,core.now(),core.now()),
             )
+            db.execute("UPDATE accounts SET owner_id=? WHERE owner_id IS NULL", (self.owner_id,))
             contact=core.normalize_contact("Alice","@aliceexample","","","")
-            cid=core.insert_contact(db,contact,consent=False)
+            cid=core.insert_contact(db,contact,consent=False, owner_id=self.owner_id)
             db.commit()
             with self.assertRaises(ValueError):
-                core.create_campaign(db,uid,"Hi!",[cid],3)
+                core.create_campaign(db,uid,"Hi!",[cid],3, owner_id=self.owner_id)
             db.execute("UPDATE contacts SET consent=1 WHERE id=?",(cid,))
-            camp=core.create_campaign(db,uid,"Hi!",[cid],3)
+            camp=core.create_campaign(db,uid,"Hi!",[cid],3, owner_id=self.owner_id)
             db.commit()
-            snap,recipients=core.campaign_summary(db,camp)
+            snap,recipients=core.campaign_summary(db,camp, owner_id=self.owner_id)
             self.assertEqual(snap["state"],"draft")
             self.assertEqual(len(recipients),1)
             self.assertEqual(recipients[0]["destination"],"@aliceexample")
             with self.assertRaises(ValueError):
-                core.create_campaign(db,uid,"Hi!",[cid,cid],3)
+                core.create_campaign(db,uid,"Hi!",[cid,cid],3, owner_id=self.owner_id)
             with self.assertRaises(ValueError):
-                core.create_campaign(db,uid,"Hi!",[cid,cid,cid,cid],3)
+                core.create_campaign(db,uid,"Hi!",[cid,cid,cid,cid],3, owner_id=self.owner_id)
 
     def test_optional_limit_configuration(self):
         old = os.environ.pop("SEND_MAX_RECIPIENTS", None)
@@ -152,14 +158,15 @@ class PersistenceTests(unittest.TestCase):
                 (account_id, "Offline", 123, core.encrypt("hash"), core.encrypt("+420123456789"),
                  account_id, core.now(), core.now()),
             )
+            db.execute("UPDATE accounts SET owner_id=? WHERE owner_id IS NULL", (self.owner_id,))
             ids=[]
             for index in range(113):
                 ids.append(core.insert_contact(db,core.normalize_contact(
                     f"Sample{index}",f"@capacitytest{index}","","",""
-                ), consent=True))
+                ), consent=True, owner_id=self.owner_id))
             with self.assertRaisesRegex(ValueError, "no more than 3"):
-                core.create_campaign(db, account_id, "test", ids, 3)
-            campaign=core.create_campaign(db, account_id, "test", ids, None)
+                core.create_campaign(db, account_id, "test", ids, 3, owner_id=self.owner_id)
+            campaign=core.create_campaign(db, account_id, "test", ids, None, owner_id=self.owner_id)
             db.commit()
             self.assertEqual(db.execute(
                 "SELECT COUNT(*) FROM deliveries WHERE campaign_id=?", (campaign,)
@@ -167,7 +174,7 @@ class PersistenceTests(unittest.TestCase):
             db.execute("UPDATE campaigns SET state='interrupted' WHERE id=?", (campaign,))
             db.commit()
         with core.database() as db:
-            retried,created=core.create_retry_draft(db,campaign,None)
+            retried,created=core.create_retry_draft(db,campaign,None, owner_id=self.owner_id)
             db.commit()
             self.assertTrue(created)
             self.assertEqual(db.execute(
@@ -187,14 +194,15 @@ class PersistenceTests(unittest.TestCase):
                 (sender,"Offline sender",123,core.encrypt("hash"),core.encrypt("+420123456789"),
                  sender,core.now(),core.now()),
             )
+            db.execute("UPDATE accounts SET owner_id=? WHERE owner_id IS NULL", (self.owner_id,))
             ids=[]
             for n in range(5):
                 ids.append(core.insert_contact(
                     db,core.normalize_contact(
                         f"Test{n}",f"@pendingtest{n}","", "",""
                     ),consent=True,
-                ))
-            original=core.create_campaign(db,sender,"Original text",ids,5)
+                 owner_id=self.owner_id))
+            original=core.create_campaign(db,sender,"Original text",ids,5, owner_id=self.owner_id)
             states=["sent","unknown","failed","pending","pending"]
             for cid,state in zip(ids,states):
                 db.execute(
@@ -206,8 +214,8 @@ class PersistenceTests(unittest.TestCase):
             db.commit()
 
         with core.database() as db:
-            self.assertEqual(core.retryable_count(db,original),1)
-            retry, created=core.create_retry_draft(db,original,3)
+            self.assertEqual(core.retryable_count(db,original, owner_id=self.owner_id),1)
+            retry, created=core.create_retry_draft(db,original,3, owner_id=self.owner_id)
             db.commit()
             self.assertTrue(created)
             self.assertNotEqual(retry,original)
@@ -221,7 +229,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(new["account_id"],sender)
             self.assertEqual([(d["contact_id"],d["state"]) for d in delivery],[(ids[3],"pending")])
         with core.database() as db:
-            duplicate, created=core.create_retry_draft(db,original,3)
+            duplicate, created=core.create_retry_draft(db,original,3, owner_id=self.owner_id)
             db.commit()
             self.assertFalse(created)
             self.assertEqual(duplicate,retry)
@@ -238,31 +246,32 @@ class PersistenceTests(unittest.TestCase):
                 (sender,"Offline sender",123,core.encrypt("hash"),core.encrypt("+420123456789"),
                  sender,core.now(),core.now()),
             )
+            db.execute("UPDATE accounts SET owner_id=? WHERE owner_id IS NULL", (self.owner_id,))
             ids=[]
             for n in range(2):
                 ids.append(core.insert_contact(db,core.normalize_contact(
                     f"Contact{n}",f"@retrycontact{n}","","",""
-                ),consent=True))
-            uncertain=core.create_campaign(db,sender,"Uncertain",[ids[0]],3)
+                ),consent=True, owner_id=self.owner_id))
+            uncertain=core.create_campaign(db,sender,"Uncertain",[ids[0]],3, owner_id=self.owner_id)
             db.execute("UPDATE campaigns SET state='interrupted' WHERE id=?",(uncertain,))
             db.execute("UPDATE deliveries SET state='unknown' WHERE campaign_id=?",(uncertain,))
-            too_many=core.create_campaign(db,sender,"Pending",[ids[0],ids[1]],3)
+            too_many=core.create_campaign(db,sender,"Pending",[ids[0],ids[1]],3, owner_id=self.owner_id)
             db.execute("UPDATE campaigns SET state='interrupted' WHERE id=?",(too_many,))
             db.commit()
 
         with core.database() as db:
             with self.assertRaisesRegex(ValueError,"No safely retryable"):
-                core.create_retry_draft(db,uncertain,3)
+                core.create_retry_draft(db,uncertain,3, owner_id=self.owner_id)
         with core.database() as db:
             with self.assertRaisesRegex(ValueError,"per-broadcast limit is 1"):
-                core.create_retry_draft(db,too_many,1)
+                core.create_retry_draft(db,too_many,1, owner_id=self.owner_id)
         with core.database() as db:
-            new_id,created=core.create_retry_draft(db,too_many,2)
+            new_id,created=core.create_retry_draft(db,too_many,2, owner_id=self.owner_id)
             db.commit()
             self.assertTrue(created)
             self.assertEqual(db.execute("SELECT total FROM campaigns WHERE id=?",(new_id,)).fetchone()[0],2)
             with self.assertRaisesRegex(ValueError,"Only interrupted"):
-                core.create_retry_draft(db,new_id,2)
+                core.create_retry_draft(db,new_id,2, owner_id=self.owner_id)
 
     def test_uncertain_campaign_never_auto_retried(self):
         import uuid
@@ -272,8 +281,9 @@ class PersistenceTests(unittest.TestCase):
                 "INSERT INTO accounts(id,label,api_id,api_hash_enc,phone_enc,session_name,state,created_at,updated_at) VALUES (?,?,?,?,?,?,'connected',?,?)",
                 (uid,"Test",123,core.encrypt("hash"),core.encrypt("+420123456789"),uid,core.now(),core.now()),
             )
-            cid=core.insert_contact(db,core.normalize_contact("Bob","@bobexample","","",""),consent=True)
-            campaign=core.create_campaign(db,uid,"hello",[cid],3)
+            db.execute("UPDATE accounts SET owner_id=? WHERE owner_id IS NULL", (self.owner_id,))
+            cid=core.insert_contact(db,core.normalize_contact("Bob","@bobexample","","",""),consent=True, owner_id=self.owner_id)
+            campaign=core.create_campaign(db,uid,"hello",[cid],3, owner_id=self.owner_id)
             db.execute("UPDATE campaigns SET state='sending' WHERE id=?",(campaign,))
             db.execute("UPDATE deliveries SET state='sending' WHERE campaign_id=?",(campaign,))
             db.commit()

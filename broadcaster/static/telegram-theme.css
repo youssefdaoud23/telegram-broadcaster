@@ -424,3 +424,18 @@ label { color: var(--tg-text); }
   font-size: 11px;
 }
 .history-actions .text-link { white-space: nowrap; }
+
+/* User Management — follows the existing Telegram day/night variables. */
+.user-management-list { display:flex; flex-direction:column; gap:16px; }
+.user-management-entry {
+  padding:16px 0; border-bottom:1px solid var(--tg-outline);
+  display:flex; align-items:flex-start; flex-direction:column; gap:12px;
+}
+.user-management-entry:last-child { border-bottom:0; }
+.user-management-heading { display:flex; align-items:center; gap:12px; width:100%; }
+.user-management-heading>div { flex:1; min-width:0; }
+.user-management-heading .status { white-space:nowrap; }
+.user-password-details { width:100%; border-radius:12px; background:var(--tg-surface-alt); padding:12px; }
+.user-password-details summary { cursor:pointer; color:var(--blue); font-weight:650; }
+.user-password-details .stack-form { margin-top:12px; }
+.workspace-identity { color:var(--blue); font-weight:650; }

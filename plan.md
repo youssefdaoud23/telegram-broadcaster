@@ -68,3 +68,23 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [x] Keep consent, manual review/Send, stop-on-FloodWait, and idempotent retry behavior.
 - [x] Cover unlimited drafts and retries, including 1,005-recipient browser form, with offline regression tests.
 - [ ] Rebuild broadcaster image only when no active messages are being sent; verify actual UI status and configuration.
+
+## Multi-user workspaces / password management (2026-11-22)
+
+- [x] Design isolated private workspaces on one hosted broadcaster service.
+- [x] Implement additive legacy migration assigning prior records to the
+      oldest administrator (installation owner), with idempotent owner_id columns.
+- [x] Scope all contact/account/campaign routes, imports, exports and API access
+      by authenticated user ID, not just UI filtering.
+- [x] Ensure Telegram delivery worker verifies sender and recipient workspace
+      ownership and active account status before each send.
+- [x] Add owner-only User management (create/reset/disable/enable users).
+- [x] Add Change password UI for all users, requiring current password and
+      revoking web sessions, without touching Telegram sessions.
+- [x] Test old-schema migration and cross-user ID/URL access and writes offline.
+- [ ] Before production deployment, use SQLite online backup on the running
+      database, verify a copy exists, and ensure no campaigns are sending.
+- [ ] Rebuild only broadcaster, verify login and legacy data preservation.
+- [ ] Create a dedicated test user, verify they start with empty contacts
+      and accounts and can independently connect Telegram (no message sends).
+- [ ] Restrict publicly reachable port 8789 at firewall / Cloudflare origin.

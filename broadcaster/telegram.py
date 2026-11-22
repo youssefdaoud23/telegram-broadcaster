@@ -187,6 +187,12 @@ async def dispatch(campaign_id: str):
             return
         try:
             row = _fetch_account(account_id)
+            if row["owner_id"] != campaign["owner_id"]:
+                raise TelegramProblem("Sender does not belong to this broadcast's workspace")
+            with database() as db:
+                owner=db.execute("SELECT active FROM admins WHERE id=?", (campaign["owner_id"],)).fetchone()
+            if not owner or not owner["active"]:
+                raise TelegramProblem("Workspace user is disabled")
             if row["state"] != "connected":
                 raise TelegramProblem("Sender has not completed Telegram authentication")
             with database() as db:
@@ -209,7 +215,14 @@ async def dispatch(campaign_id: str):
                 for i, delivery in enumerate(items):
                     # A contact can opt out after campaign drafting. Recheck before each send.
                     with database() as db:
-                        contact = db.execute("SELECT enabled,consent,archived FROM contacts WHERE id=?", (delivery["contact_id"],)).fetchone()
+                        owner=db.execute("SELECT active FROM admins WHERE id=?", (campaign["owner_id"],)).fetchone()
+                        if not owner or not owner["active"]:
+                            paused = True
+                            break  # Disabled users cannot continue broadcasting.
+                        contact = db.execute(
+                            "SELECT enabled,consent,archived FROM contacts WHERE id=? AND owner_id=?",
+                            (delivery["contact_id"],campaign["owner_id"]),
+                        ).fetchone()
                         if contact is None or not contact["enabled"] or not contact["consent"] or contact["archived"]:
                             db.execute("UPDATE deliveries SET state='skipped',error='Contact opted out or disabled',updated_at=? WHERE id=?", (now(),delivery["id"]))
                             db.commit()

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading">
+  <div><span class="eyebrow accent">OWNER CONTROLS</span><h1>User management</h1>
+  <p class="subtle">Each person gets a private workspace with their own Telegram accounts, contacts and broadcasts.</p></div>
+</div>
+<div class="two-cols">
+  <section class="panel">
+    <div class="panel-head"><h2>Create a user</h2></div>
+    <form action="/users" method="post" class="stack-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label for="new-username">Username</label>
+      <input id="new-username" name="username" maxlength="40" minlength="3" autocomplete="off" required placeholder="e.g. colleague1">
+      <label for="new-password">Initial password</label>
+      <input id="new-password" type="password" name="password" autocomplete="new-password" required>
+      <label for="new-confirm">Confirm password</label>
+      <input id="new-confirm" type="password" name="confirm_password" autocomplete="new-password" required>
+      <button class="btn btn-primary" type="submit">Create private workspace</button>
+    </form>
+    <div class="info-strip"><span>ⓘ</span><p>New users start with no Telegram accounts, contacts or broadcasts. Give the password to the user privately. They can change it after signing in.</p></div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Users</h2></div>
+    <div class="user-management-list">
+    {% for member in users %}
+      <div class="user-management-entry">
+        <div class="user-management-heading">
+          <span class="contact-avatar">{{ member['username'][:1]|upper }}</span>
+          <div><strong>{{ member['username'] }}</strong>
+            <div class="subtle">{{ 'Installation owner' if member['role']=='owner' else 'Private workspace' }}</div></div>
+          <span class="status {{ 'status-connected' if member['active'] else 'status-blocked' }}">{{ 'Active' if member['active'] else 'Disabled' }}</span>
+        </div>
+        {% if member['role']!='owner' %}
+          <form method="post" action="/users/{{ member['id'] }}/status" class="inline-form" data-confirm="{{ 'Disable this user and sign them out?' if member['active'] else 'Re-enable this user?' }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="action" value="{{ 'disable' if member['active'] else 'enable' }}">
+            <button class="btn btn-outline" type="submit">{{ 'Disable access' if member['active'] else 'Enable access' }}</button>
+          </form>
+          {% if member['active'] %}
+          <details class="user-password-details">
+            <summary>Reset this user's password</summary>
+            <form method="post" action="/users/{{ member['id'] }}/password" class="stack-form">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <label>New password for {{ member['username'] }}</label>
+              <input type="password" name="new_password" autocomplete="new-password" required>
+              <label>Confirm new password</label>
+              <input type="password" name="confirm_password" autocomplete="new-password" required>
+              <label>Your own owner password (authorization)</label>
+              <input type="password" name="owner_password" autocomplete="current-password" required>
+              <button class="btn btn-secondary" type="submit">Reset password and sign out user</button>
+            </form>
+          </details>
+          {% endif %}
+        {% else %}
+          <a href="/settings/password" class="text-link">Change your own password →</a>
+        {% endif %}
+      </div>
+    {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -59,3 +59,34 @@ automatically. Source database and Telegram session files stay local and
 must not be published. An optional positive SEND_MAX_RECIPIENTS sets a local per-broadcast cap. Without it, no app cap applies; Telegram anti-spam/rate limits and practical HTTP processing limits still apply.
 ## Recipient limit configuration (2026-11-22)
 An arbitrary default of three and a hard 100-recipient limit were removed. The setting is optional: missing/empty/0/unlimited disables the local cap, positive integer enforces a custom cap, invalid values fail on startup. No change to opt-in, preview, Telegram flood handling, or actual send trigger. Large HTML forms are parsed with a bounded max_fields=20000 and authenticate before parsing. Future large-scale delivery would benefit from durable worker queues rather than one in-memory sending task.
+
+## Multi-user isolation and administrator settings (2026-11-22)
+
+Legacy SQLite `admins` rows now have `role` (`owner` or `user`) and
+`active`. Existing `accounts`, `contacts` and `campaigns` rows receive
+`owner_id`; the oldest existing administrator becomes the installation owner
+and receives all existing data. All other old admin accounts remain logins but
+are regular users with no assigned historical data. Migration is additive and
+idempotent. All owner filters must be enforced in SQL and write operations:
+account lookup and Telegram login routes, contact CRUD/import/export, sender
+selection, campaign creation, previews, history, retry and Send, plus the
+authenticated campaign status API. The delivery worker must verify campaign
+sender ownership and active user plus contact ownership before send.
+
+Installation owner alone uses /users to create/disable/enable regular users,
+and reset their passwords after owner-password reauthentication. All users
+have /settings/password for an old-password-verified password change.
+Both changes revoke the target user's existing web sessions, not Telegram
+sessions. Never expose other users' account credentials/contact data in the
+owner UI. Owner cannot disable their own login. A disabled user's in-flight
+message may finish, but further deliveries require an active workspace check.
+
+App-level data isolation shares the encrypted SQLite database, Fernet key
+and process; it is not physical security separation between OS accounts.
+The GitHub repository remains public; secrets, Telegram sessions, contacts,
+passwords and DB files never belong in Git.
+
+No automatic production DB migration until user performs database backup
+and rebuilds the container. On upgrade, take a consistent SQLite backup with
+the container's sqlite3.Connection.backup API, leave the live .env and data
+volume untouched, and only recreate broadcaster when no sends are active.

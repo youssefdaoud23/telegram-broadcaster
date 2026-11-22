@@ -26,6 +26,10 @@ class WebsiteTests(unittest.TestCase):
         os.environ["COOKIE_SECURE"]="false"
         core.init_db()
         core.create_admin("admin-test","safe sample password 123456!")
+        with core.database() as db:
+            self.owner_id=db.execute(
+                "SELECT id FROM admins WHERE username='admin-test'"
+            ).fetchone()["id"]
         self.testclient=TestClient(app,raise_server_exceptions=True)
         self.testclient.__enter__()
 
@@ -114,11 +118,12 @@ class WebsiteTests(unittest.TestCase):
                 (account_id, "Offline sender", 12345, core.encrypt("dummy"), core.encrypt("+420123456789"),
                  account_id, core.now(), core.now()),
             )
+            db.execute("UPDATE accounts SET owner_id=? WHERE owner_id IS NULL", (self.owner_id,))
             contact_id = core.insert_contact(
                 db, core.normalize_contact("Offline contact", "@offlineexample", "", "", ""),
                 consent=True,
-            )
-            campaign_id = core.create_campaign(db, account_id, "Offline test only", [contact_id], 3)
+             owner_id=self.owner_id)
+            campaign_id = core.create_campaign(db, account_id, "Offline test only", [contact_id], 3, owner_id=self.owner_id)
             db.commit()
 
         # We must never create a TelegramClient or send a live message in tests.
@@ -160,11 +165,12 @@ class WebsiteTests(unittest.TestCase):
                 (account_id, "Offline", 12345, core.encrypt("hash"), core.encrypt("+420123456789"),
                  account_id, core.now(), core.now()),
             )
+            db.execute("UPDATE accounts SET owner_id=? WHERE owner_id IS NULL", (self.owner_id,))
             ids=[]
             for index in range(1005):
                 ids.append(core.insert_contact(db,core.normalize_contact(
                     f"Sample{index}",f"@webcapacity{index}","","",""
-                ), consent=True))
+                ), consent=True, owner_id=self.owner_id))
             db.commit()
         os.environ.pop("SEND_MAX_RECIPIENTS",None)
         compose=self.testclient.get("/compose")
@@ -195,13 +201,14 @@ class WebsiteTests(unittest.TestCase):
                 (sender,"Offline sender",12345,core.encrypt("testhash"),core.encrypt("+420123456789"),
                  sender,core.now(),core.now()),
             )
+            db.execute("UPDATE accounts SET owner_id=? WHERE owner_id IS NULL", (self.owner_id,))
             ids=[]
             for n in range(2):
                 ids.append(core.insert_contact(
                     db,core.normalize_contact(f"Test{n}",f"@retrywebtest{n}","","",""),
                     consent=True,
-                ))
-            source=core.create_campaign(db,sender,"Not sent automatically",ids,3)
+                 owner_id=self.owner_id))
+            source=core.create_campaign(db,sender,"Not sent automatically",ids,3, owner_id=self.owner_id)
             db.execute("UPDATE campaigns SET state='interrupted' WHERE id=?",(source,))
             db.execute(
                 "UPDATE deliveries SET state='unknown' WHERE campaign_id=? AND contact_id=?",
@@ -283,7 +290,7 @@ class WebsiteTests(unittest.TestCase):
             self.assertNotIn("+420123456789",row["phone_enc"])
             db.execute("UPDATE accounts SET state='connected',username='@example12345' WHERE id=?",(row["id"],))
             details=core.normalize_contact("Alice","@alicetest123","","","")
-            contact_id=core.insert_contact(db,details,consent=True)
+            contact_id=core.insert_contact(db,details,consent=True, owner_id=self.owner_id)
             db.commit()
         self.assertEqual(self.testclient.get("/compose").status_code,200)
         preview=self.testclient.post("/compose/preview",data={
