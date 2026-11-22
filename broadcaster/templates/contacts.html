@@ -94,9 +94,9 @@
         <td><div class="person-cell"><span class="contact-avatar">{{ c['name'][:1]|upper }}</span><div><a class="table-primary" href="/contacts/{{ c['id'] }}/edit">{{ c['name'] }}</a>
           {% if c['notes'] %}<div class="table-secondary" title="{{ c['notes'] }}">{{ c['notes'][:60] }}</div>{% endif %}
         </div></div></td>
-        <td><span class="mono">{{ ('@' ~ c['username'].lstrip('@')) if c['username'] else '—' }}</span></td>
+        <td><span class="mono">{{ ('@' ~ c['username'].lstrip('@')) if c['username'] else '-' }}</span></td>
         <td><span class="mono contact-phone">{{ c['phone'] or 'Not available' }}</span></td>
-        <td><span class="mono">{{ c['user_id'] or '—' }}</span></td>
+        <td><span class="mono">{{ c['user_id'] or '-' }}</span></td>
         <td><div class="contact-group-tags">{% for g in groups %}{% if g['id'] in membership.get(c['id'], []) %}
           <a class="contact-group-tag" href="/contacts?group_id={{ g['id'] }}">{{ g['name'] }}</a>{% endif %}{% endfor %}
           {% if not membership.get(c['id']) %}<span class="subtle">Unassigned</span>{% endif %}</div></td>
