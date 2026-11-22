@@ -143,7 +143,28 @@ active sends, run from the server:
 
 ~~~bash
 cd /root/n8n/telegram-broadcaster
-docker compose exec -T broadcaster python -c 'import sqlite3; s=sqlite3.connect("/data/broadcaster.sqlite3"); d=sqlite3.connect("/data/broadcaster.sqlite3.pre-multiuser-backup"); s.backup(d); d.close(); s.close(); print("SQLite database backup complete")'
+docker compose exec -T broadcaster python - <<'PY'
+import os
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+
+source = Path("/data/broadcaster.sqlite3")
+backup = source.with_name("broadcaster.pre-multiuser-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ".sqlite3")
+if backup.exists():
+    raise SystemExit("Backup already exists; do not overwrite it")
+original = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+copy = sqlite3.connect(str(backup))
+try:
+    original.backup(copy)
+    if copy.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+        raise SystemExit("Backup failed integrity check; do not deploy")
+finally:
+    copy.close()
+    original.close()
+os.chmod(backup, 0o600)
+print("Verified SQLite backup:", backup)
+PY
 docker compose up -d --build
 docker compose ps
 curl -fsS http://127.0.0.1:8789/health
