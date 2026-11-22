@@ -126,3 +126,22 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
       and all history (without sending actual messages).
 - [ ] Grant Joe MCP /opt workspace access separately if future maintenance
       through Joe MCP is desired.
+
+## Telegram group username export (2026-11-22)
+
+- [x] Add Group export page to sidebar, with owner-scoped connected account
+      selection, recent regular groups and supergroups, and no direct-chat scans.
+- [x] Discover groups using authenticated Telethon iter_dialogs rather than
+      arbitrary group IDs or joining groups.
+- [x] Launch read-only member scan with bounded concurrency, progress, and
+      a 240-second timeout. Detect limited and partial responses.
+- [x] Export deduplicated publicly visible non-bot usernames as a CSV, with
+      no phone numbers, Telegram user IDs, private messages, or consent flags.
+- [x] Protect all scans and CSV downloads with workspace ownership, and
+      require CSRF on scan creation. Do not add contacts or send messages.
+- [x] Hold results only in memory for 30 minutes; no migration or new tables.
+- [x] Add isolated offline tests with simulated Telegram accounts and groups.
+- [ ] Sync published source to /opt/telegram-broadcaster, rebuild its container
+      when no broadcasts are active, and verify the Group export UI.
+- [ ] With an explicitly selected real group, manually verify Telegram
+      returns the participants that account is allowed to view.

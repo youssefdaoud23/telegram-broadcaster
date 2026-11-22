@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import core, telegram
+from . import core, telegram, group_export
 
 ROOT = Path(__file__).parent
 app = FastAPI(title="Telegram Broadcaster", docs_url=None, redoc_url=None, openapi_url=None)
@@ -407,6 +407,78 @@ def export_contacts(request: Request):
     return StreamingResponse(
         iter([target.getvalue()]),media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=telegram-contacts.csv","Cache-Control":"no-store"},
+    )
+
+
+@app.get("/groups")
+async def group_export_page(request: Request, account_id: str = ""):
+    user = principal(request)
+    with core.database() as db:
+        accounts = db.execute(
+            "SELECT id,label,username FROM accounts WHERE owner_id=? AND state='connected' "
+            "ORDER BY label", (user["admin_id"],),
+        ).fetchall()
+    groups = []
+    error = ""
+    if account_id:
+        if not any(row["id"] == account_id for row in accounts):
+            raise HTTPException(404, "Connected Telegram account not found")
+        try:
+            groups = await group_export.list_groups(account_id, user["admin_id"])
+        except telegram.TelegramProblem as exc:
+            error = str(exc)
+    return render(
+        request, "groups.html", title="Group username export",
+        accounts=accounts, account_id=account_id, groups=groups, error=error,
+        dialog_limit=group_export.DIALOG_SCAN_LIMIT,
+    )
+
+
+@app.post("/groups/scans")
+async def group_scan_start(request: Request, csrf: str = Form(""),
+                           account_id: str = Form(""), peer_id: str = Form("")):
+    user = authorize(request, csrf)
+    try:
+        scan = group_export.start_scan(
+            user["admin_id"], account_id, int(peer_id),
+        )
+    except (TypeError, ValueError, telegram.TelegramProblem) as exc:
+        return redirect("/groups" + ("?account_id=" + quote(account_id) if account_id else ""),
+                        str(exc))
+    return redirect(f"/groups/scans/{scan.token}")
+
+
+@app.get("/groups/scans/{scan_token}")
+def group_scan_page(request: Request, scan_token: str):
+    user = principal(request)
+    scan = group_export.get_scan(scan_token, user["admin_id"])
+    if scan is None:
+        raise HTTPException(404, "Group scan not found or expired")
+    return render(
+        request, "group_scan.html", title="Group scan results",
+        scan=scan, sample=scan.usernames[:40],
+    )
+
+
+@app.get("/groups/scans/{scan_token}/export")
+def group_scan_csv(request: Request, scan_token: str):
+    user = principal(request)
+    scan = group_export.get_scan(scan_token, user["admin_id"])
+    if scan is None:
+        raise HTTPException(404, "Group scan not found or expired")
+    if scan.state not in ("complete", "partial", "limited") or not scan.usernames:
+        raise HTTPException(409, "No usernames are ready for export")
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(["username"])
+    for username in sorted(scan.usernames, key=str.casefold):
+        # These have already been validated against Telegram username syntax.
+        writer.writerow([username])
+    return StreamingResponse(
+        iter([output.getvalue().encode("utf-8-sig")]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="telegram-group-usernames.csv"',
+                 "X-Group-Scan-State": scan.state},
     )
 
 

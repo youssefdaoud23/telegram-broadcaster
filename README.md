@@ -13,6 +13,47 @@ Self-hosted personal Telegram messaging dashboard with a beautiful browser UI, S
 
 **The GitHub repository is public. NEVER commit .env, Telegram session files, customer contacts, database files, API hashes, phone numbers, credentials or delivery logs.**
 
+## Export usernames from Telegram groups
+
+Open **Group export** in the sidebar. Choose one of your own **connected**
+Telegram accounts and click **Load my groups**. The site reads up to the
+500 most recent dialogs accessible to that account and displays regular groups
+and supergroups. Private one-to-one chats and broadcast-only channels are not
+listed. Select a group and click **Scan selected group**.
+
+A read-only Telegram member scan starts in the background. The results page
+refreshes automatically and displays the number of returned members,
+non-bot users with accessible public usernames, skipped bots/deleted users,
+and users without usable usernames. When it finishes, click
+**Download usernames as CSV**. The CSV contains exactly one column,
+`username`, with the @ prefix omitted. Exported usernames are
+deduplicated case-insensitively. The export does not contain phone numbers,
+Telegram user IDs, messages, or private profile details.
+
+**A group member has not automatically consented to receiving direct
+marketing messages.** Exporting a username does not import the user into
+Contacts and does not mark the user opted in. Any later use of the usernames
+must comply with your consent and applicable privacy rules.
+
+Telegram may not expose all members of large or private groups. The
+`iter_participants` API can return a partial list or require administrative
+permissions. This app does not bypass Telegram restrictions. Results
+distinguish `Complete`, `Limited` (25,000 members inspected), `Partial`
+(including network failures/rate limits), and `Failed`. A `Complete`
+result means the accessible API iteration ended, **not** that all group
+members were visible. There is a 240-second scan timeout and only one
+concurrent scan per broadcaster workspace. Scans on a Telegram account
+share its serialization lock with message delivery, so start them when
+that account is not broadcasting.
+
+The scan results exist only in server RAM, not the contacts database
+or a persistent CSV file, and expire 30 minutes after starting. Refreshing
+the application or restarting the container clears the results. Download
+them promptly. This feature never sends messages, invites anyone, joins
+a group, or scans private conversations. It is owner-isolated: each site
+user can access only groups belonging to their own connected Telegram
+account and export results of their own scans.
+
 ## Telegram Web-inspired interface
 
 The web interface uses a Telegram-inspired day/night visual theme with rounded

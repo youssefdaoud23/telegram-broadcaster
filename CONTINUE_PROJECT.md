@@ -15,3 +15,10 @@ Before making any changes:
 
 11. Production install target is /opt/telegram-broadcaster. If it remains under /root/n8n/telegram-broadcaster, use scripts/migrate_to_opt.sh from an authorized root Docker terminal. Never move only code or data, overwrite /opt target, or change n8n Compose. Require a verified SQLite backup, no active sends, then verify original counts and health.
 12. Previous campaign reuse is an explicit new draft, not automatic message resend. Account/recipient consent and owner checks apply to reuse and edit. Submitted campaigns are immutable; only unsent drafts can be edited in place. Unknown or sent statuses require deliberate recipient selection and independent Send.
+
+13. Group export is a read-only, owner-scoped tool at /groups. It reads only
+    Telegram groups exposed to the user's connected account, exports only
+    public usernames, and never imports contacts, changes opt-in, sends
+    messages, joins groups or scans private chats. Preserve limits and
+    partial-result warnings. Do not collect real member data without an
+    explicit user-selected group.

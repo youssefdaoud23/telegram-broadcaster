@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading">
+  <div><a class="back-link" href="/groups">← Back to groups</a>
+    <span class="eyebrow accent">READ-ONLY MEMBER EXPORT</span>
+    <h1>{{ scan.group_title or "Scanning Telegram group" }}</h1>
+    <p class="subtle">This scan does not send messages or import people into your contacts.</p>
+  </div>
+  <span class="status status-{{ 'connected' if scan.state=='complete' else ('pending' if scan.state in ('queued','running') else 'disconnected') }}">{{ scan.state|capitalize }}</span>
+</div>
+<section class="panel" style="max-width:950px">
+  <div class="panel-head"><h2>Member scan</h2></div>
+  <div class="detail-stats group-scan-stats">
+    <div><strong>{{ scan.seen }}</strong><small>Members inspected</small></div>
+    <div><strong>{{ scan.usernames|length }}</strong><small>Unique usernames</small></div>
+    <div><strong>{{ scan.missing_username }}</strong><small>No public username</small></div>
+    <div><strong>{{ scan.skipped_bots }}</strong><small>Bots / deleted</small></div>
+  </div>
+  {% if scan.state in ('queued','running') %}
+  <div class="alert alert-neutral" role="status">Scanning accessible members. This page updates automatically. You may navigate away and return using this page's URL. A scan can take time in a large group.</div>
+  <span data-group-scan-refresh="true" aria-hidden="true"></span>
+  {% elif scan.state=='complete' %}
+  <div class="alert alert-success">The accessible member scan finished. Telegram might still hide or restrict some members, so the result is not a guarantee of complete group membership.</div>
+  {% else %}
+  <div class="alert alert-warning" role="alert">{{ scan.error or "The scan was not completed." }}{% if scan.usernames %} Any available export is partial and may omit members.{% endif %}</div>
+  {% endif %}
+  {% if scan.state in ('complete','partial','limited') and scan.usernames %}
+  <div class="form-actions"><a class="btn btn-primary" href="/groups/scans/{{ scan.token }}/export">Download {{ scan.usernames|length }} usernames as CSV</a>
+    <a class="btn btn-outline" href="/groups">Scan another group</a></div>
+  <p class="subtle">CSV contains only usernames, without @, IDs, phone numbers, or consent flags. Results are held temporarily in server memory and expire after 30 minutes.</p>
+  {% elif scan.state=='failed' %}<a class="btn btn-outline" href="/groups">Choose another group</a>{% endif %}
+</section>
+{% if sample %}
+<section class="panel" style="max-width:950px">
+  <div class="panel-head"><h2>Username preview <span class="count-pill">{{ sample|length }} shown</span></h2></div>
+  <div class="group-usernames">
+    {% for username in sample %}<span class="group-username">@{{ username }}</span>{% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

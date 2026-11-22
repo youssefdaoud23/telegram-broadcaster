@@ -133,3 +133,25 @@ with owner ID checks and an explicit review step. GET/POST
 `BEGIN IMMEDIATE`, server-side validation, and atomic replacement of
 recipient delivery rows. Existing submitted campaigns are immutable.
 Continue to keep interrupted-campaign Try again limited to pending only.
+
+## Group username export (2026-11-22)
+
+App adds `/groups`, `POST /groups/scans`,
+`GET /groups/scans/{token}` and `GET /groups/scans/{token}/export`.
+Private module `broadcaster/group_export.py` runs Telethon read-only scans
+against groups enumerated from the connected, owner-scoped account's
+recent dialogs (not arbitrary public groups). Regular groups and
+supergroups only. Explicit CSRF before starting a scan. No Telegram
+messages or group joins. Username export contains only deduplicated
+public user handles without @; no phones, user IDs, private messages or
+automatic contact import/consent. Site users cannot read others' scan
+tokens or use their Telegram accounts. Background results live only
+in process memory for 30 minutes; app restarts discard them.
+MAX_SCAN_USERS is 25,000, scan timeout is 240 seconds, one active
+scan per user, 12 stored jobs total. Group enumeration is limited
+to the 500 most recent chat dialogs and can miss older groups.
+Telegram itself can hide/restrict member lists, so `complete` means
+API iteration ended, not guaranteed complete group membership.
+Partial/limited scans display warnings and export status.
+Call out that membership is not consent for unsolicited messaging.
+Do not silently start a scan against the live Telegram account.

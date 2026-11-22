@@ -47,6 +47,10 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   });
   refreshRecipients();
+  const groupProgress=document.querySelector("[data-group-scan-refresh]");
+  if(groupProgress && groupProgress.getAttribute("data-group-scan-refresh")==="true"){
+    window.setTimeout(()=>window.location.reload(),3000);
+  }
   const refresh=document.getElementById("campaign-refresh");
   if(refresh && refresh.getAttribute("data-active")==="true"){
     window.setTimeout(()=>window.location.reload(),4000);

@@ -453,3 +453,17 @@ label { color: var(--tg-text); }
 .reuse-presets {display:flex; flex-direction:column; gap:9px; margin:8px 8px 13px;}
 .reuse-presets .history-actions {gap:6px;}
 .reuse-presets button {min-height:29px; font-size:11px; padding:5px 10px; white-space:normal;}
+
+/* Read-only Telegram group username discovery and export. */
+.group-export-panel {margin-top:18px;max-width:950px;}
+.group-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:15px;max-height:490px;overflow:auto;}
+.group-export-item {display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px;border:1px solid var(--tg-outline);border-radius:13px;background:var(--tg-surface-alt);}
+.group-export-item:hover {background:var(--tg-hover);}
+.group-export-item input {accent-color:var(--blue);flex-shrink:0;}
+.group-export-label {display:flex;flex-direction:column;gap:3px;min-width:0;}
+.group-export-label strong {overflow-wrap:anywhere;}
+.group-export-label small {color:var(--tg-muted);}
+.group-scan-stats {flex-wrap:wrap;justify-content:flex-start;}
+.group-scan-stats > div {min-width:125px;flex:1;}
+.group-usernames {display:flex;gap:8px;flex-wrap:wrap;}
+.group-username {padding:6px 11px;background:var(--tg-surface-alt);border:1px solid var(--tg-outline);border-radius:12px;overflow-wrap:anywhere;}
