@@ -47,7 +47,8 @@ def import_contact_record(
     Returns (created, new_group_links, restored). The caller owns the
     transaction/savepoint. Existing active contacts retain all flags;
     a removed contact may be restored only by an explicit import action.
-    Newly created and restored records start inactive. Restored records also\n    never regain historical message consent automatically.
+    Newly created and restored records start inactive. Restored records also
+    never regain historical message consent automatically.
     """
     core._allowed_group_ids(db, owner_id, group_ids)
     matches = db.execute("""
