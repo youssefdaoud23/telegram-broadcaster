@@ -121,3 +121,13 @@ python -m unittest discover -s tests -v
 ~~~
 
 More details: project_context.md, plan.md, CONTINUE_PROJECT.md.
+## Cloudflare Tunnel (existing server)
+
+The broadcaster deliberately publishes the website to `127.0.0.1:8789` only. Do **not** configure the tunnel origin as `http://72.61.177.85:8789` or expose port 8789 publicly.
+
+The Compose service is also attached to the existing `cloudflare_default` Docker network with alias `telegram-broadcaster-origin` (this network must already exist). In the Cloudflare dashboard, edit the tunnel's published application route for `telegram-broadcaster.youssefdaoud.com`:
+
+- Service protocol: **HTTP**
+- Service URL: **`http://telegram-broadcaster-origin:8080`**
+
+On the server, after `git pull --ff-only origin main`, set `COOKIE_SECURE=true` and `PUBLIC_BASE_URL=https://telegram-broadcaster.youssefdaoud.com` in your private `.env`, then run `docker compose up -d --force-recreate broadcaster` (only this app). Check `https://telegram-broadcaster.youssefdaoud.com/health` for `status: ok`. Since this is a login for Telegram accounts, protect the hostname with **Cloudflare Access** as an additional login layer. Do not alter or restart the Cloudflare tunnel container or other services.
