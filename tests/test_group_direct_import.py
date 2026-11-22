@@ -314,6 +314,24 @@ class DirectGroupImportTests(unittest.TestCase):
         page=self.http.get(f"/contacts/groups/{group['id']}")
         self.assertIn("3 selected",page.text)
 
+    def test_group_csv_spreadsheet_formula_escape_roundtrips_name(self):
+        self.make_scan(
+            title="=1+1",
+            members=[group_export.ExportMember("Safe","safe_member99","", "123456789")],
+        )
+        exported=self.http.get("/groups/scans/scan-token-123/export")
+        self.assertIn("'=1+1",exported.text)
+        result=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf},
+            files={"file":("members.csv",exported.content,"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(result.status_code,303)
+        with core.database() as db:
+            group=core.contact_groups(db,self.owner_id)[0]
+            self.assertEqual(group["name"],"=1+1")
+            self.assertEqual(group["total"],1)
+
     def test_csv_reuses_existing_disabled_contact_and_preserves_other_groups(self):
         self.make_scan(members=[
             group_export.ExportMember("Alice New Name","alice_member_2","", "123456789")
