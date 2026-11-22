@@ -140,7 +140,7 @@ class DirectGroupImportTests(unittest.TestCase):
             self.assertIn(group_id,membership)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],3)
 
-    def test_conflicting_or_archived_contact_never_silently_reactivated(self):
+    def test_conflicting_identifier_skips_but_archived_exact_match_restores(self):
         self.make_scan(members=[
             group_export.ExportMember("Conflicting","alice_member_2","","123456789"),
             group_export.ExportMember("Archived","old_member12","","234567890"),
@@ -151,19 +151,101 @@ class DirectGroupImportTests(unittest.TestCase):
                 self.owner_id,consent=True,
             )
             archived=core.insert_contact(
-                db,core.normalize_contact("Archived","@old_member12","","234567890",""),
+                db,core.normalize_contact("Archived","@old_member12","","234567890","Old notes"),
                 self.owner_id,consent=True,
             )
-            db.execute("UPDATE contacts SET archived=1 WHERE id=?",(archived,))
+            db.execute(
+                "UPDATE contacts SET archived=1,enabled=0 WHERE id=?",(archived,)
+            )
             db.commit()
         response=self.post_import()
         self.assertEqual(response.status_code,303)
+        self.assertIn("1%20removed%20contacts%20restored",response.headers["location"])
+        self.assertIn("1%20skipped",response.headers["location"])
         with core.database() as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],2)
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM contact_group_members").fetchone()[0],0)
-            self.assertEqual(db.execute("SELECT consent FROM contacts WHERE id=?",(conflict,)).fetchone()[0],1)
-            self.assertEqual(db.execute("SELECT archived FROM contacts WHERE id=?",(archived,)).fetchone()[0],1)
-        self.assertIn("2 skipped",response.headers["location"].replace("%20"," "))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contact_group_members").fetchone()[0],1)
+            self.assertEqual(db.execute(
+                "SELECT consent FROM contacts WHERE id=?",(conflict,)
+            ).fetchone()[0],1)
+            restored=db.execute("SELECT * FROM contacts WHERE id=?",(archived,)).fetchone()
+            self.assertEqual((restored["archived"],restored["enabled"],restored["consent"]),(0,1,0))
+            self.assertEqual(restored["notes"],"Old notes")
+            audit=db.execute(
+                "SELECT previous_consent,new_consent,source FROM contact_consent_events "
+                "WHERE contact_id=?",(archived,)
+            ).fetchone()
+            self.assertEqual(tuple(audit),(1,0,"archived_contact_reimport"))
+
+    def test_bulk_remove_and_direct_reimport_restores_same_contact_ids(self):
+        self.make_scan()
+        self.assertEqual(self.post_import().status_code,303)
+        with core.database() as db:
+            ids=[row["id"] for row in db.execute(
+                "SELECT id FROM contacts WHERE owner_id=? ORDER BY id",(self.owner_id,)
+            )]
+            group=core.contact_groups(db,self.owner_id)[0]["id"]
+            db.execute("UPDATE contacts SET consent=1 WHERE id=?",(ids[0],))
+            db.commit()
+        removed=self.http.post(
+            "/contacts/bulk-remove",
+            data={"csrf":self.csrf,"contacts":[str(cid) for cid in ids]},
+            follow_redirects=False,
+        )
+        self.assertEqual(removed.status_code,303)
+        with core.database() as db:
+            self.assertEqual(core.contact_groups(db,self.owner_id)[0]["total"],0)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM contacts WHERE archived=1"
+            ).fetchone()[0],3)
+        restored=self.post_import()
+        self.assertEqual(restored.status_code,303)
+        self.assertIn("3%20removed%20contacts%20restored",restored.headers["location"])
+        with core.database() as db:
+            self.assertEqual(core.contact_groups(db,self.owner_id)[0]["total"],3)
+            self.assertEqual([row["id"] for row in db.execute(
+                "SELECT id FROM contacts WHERE owner_id=? ORDER BY id",(self.owner_id,)
+            )],ids)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM contacts WHERE archived=0 AND enabled=1 AND consent=0"
+            ).fetchone()[0],3)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM contact_group_members WHERE group_id=?",(group,)
+            ).fetchone()[0],3)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM contact_consent_events WHERE source='archived_contact_reimport'"
+            ).fetchone()[0],1)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM campaigns").fetchone()[0],0)
+        again=self.post_import()
+        self.assertEqual(again.status_code,303)
+        self.assertIn("0%20removed%20contacts%20restored",again.headers["location"])
+        with core.database() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],3)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM contact_consent_events WHERE source='archived_contact_reimport'"
+            ).fetchone()[0],1)
+
+    def test_restoration_requires_explicit_import_permission_in_helper(self):
+        self.make_scan(members=[
+            group_export.ExportMember("Alice","alice_member_2","","123456789")
+        ])
+        with core.database() as db:
+            cid=core.insert_contact(
+                db,core.normalize_contact("Alice","@alice_member_2","","123456789",""),
+                self.owner_id,consent=False,
+            )
+            gid=core.add_contact_group(db,self.owner_id,"Existing")
+            db.execute("UPDATE contacts SET archived=1,enabled=0 WHERE id=?",(cid,))
+            db.commit()
+        with core.database() as db:
+            data=core.normalize_contact("Alice","@alice_member_2","","123456789","")
+            with self.assertRaisesRegex(ValueError,"explicit restoration"):
+                group_import.import_contact_record(
+                    db,data,self.owner_id,[gid],restore_archived=False
+                )
+            self.assertEqual(db.execute(
+                "SELECT archived FROM contacts WHERE id=?",(cid,)
+            ).fetchone()[0],1)
 
     def test_wrong_owner_token_csrf_and_invalid_name_are_rejected(self):
         scan=self.make_scan()
@@ -422,7 +504,40 @@ class DirectGroupImportTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],0)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contact_groups").fetchone()[0],0)
 
-    def test_csv_conflict_rolls_back_new_group_and_preserves_archived_record(self):
+    def test_csv_reimport_restores_archived_contact_and_resets_permission(self):
+        self.make_scan(members=[
+            group_export.ExportMember("Reimport","archive_csv_user","","123456789")
+        ])
+        self.assertEqual(self.post_import().status_code,303)
+        with core.database() as db:
+            cid=db.execute("SELECT id FROM contacts WHERE owner_id=?",
+                           (self.owner_id,)).fetchone()["id"]
+            db.execute("UPDATE contacts SET consent=1 WHERE id=?",(cid,))
+            db.commit()
+        deleted=self.http.post(
+            f"/contacts/{cid}/remove",data={"csrf":self.csrf},
+            follow_redirects=False,
+        )
+        self.assertEqual(deleted.status_code,303)
+        csv_data=self.http.get("/groups/scans/scan-token-123/export").content
+        restored=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf},
+            files={"file":("members.csv",csv_data,"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(restored.status_code,303)
+        self.assertIn("restored%201%20removed%20contacts",restored.headers["location"])
+        with core.database() as db:
+            contact=db.execute("SELECT id,archived,enabled,consent FROM contacts "
+                               "WHERE owner_id=?",(self.owner_id,)).fetchone()
+            self.assertEqual(tuple(contact),(cid,0,1,0))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
+            self.assertEqual(core.contact_groups(db,self.owner_id)[0]["total"],1)
+            audit=db.execute("SELECT previous_consent,new_consent FROM "
+                             "contact_consent_events WHERE contact_id=?",(cid,)).fetchall()
+            self.assertEqual([tuple(x) for x in audit],[(1,0)])
+
+    def test_csv_conflicting_archived_identifier_cannot_restore_or_create_group(self):
         with core.database() as db:
             old=core.insert_contact(
                 db,core.normalize_contact(
@@ -432,10 +547,10 @@ class DirectGroupImportTests(unittest.TestCase):
             db.execute("UPDATE contacts SET archived=1 WHERE id=?",(old,))
             db.commit()
         raw=("Name,Username,Telegram User ID,Telegram Group\n"
-             "Archived,@archived_user1,123456789,Should Not Be Created\n")
+             "Changed,@archived_user1,999999999,Should Not Be Created\n")
         response=self.http.post(
             "/contacts/import",data={"csrf":self.csrf},
-            files={"file":("archived.csv",raw.encode(),"text/csv")},
+            files={"file":("conflict.csv",raw.encode(),"text/csv")},
             follow_redirects=False,
         )
         self.assertEqual(response.status_code,303)

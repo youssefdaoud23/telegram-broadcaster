@@ -598,7 +598,7 @@ async def import_contacts(request: Request, csrf: str = Form(""),
             raise ValueError("CSV has no contact rows")
         requested_group = core.validate_group_name(group_name) if group_name.strip() else ""
         yes = lambda value: str(value or "").strip().casefold() in {"yes", "true", "1", "y"}
-        created = linked = unchanged = skipped = new_groups = 0
+        created = linked = unchanged = skipped = new_groups = restored = 0
         skipped_reasons: dict[str, int] = {}
         imported_group_ids: set[int] = set()
         with core.database() as db:
@@ -664,10 +664,10 @@ async def import_contacts(request: Request, csrf: str = Form(""),
                     active = (yes(row.get("Enabled")) if
                               str(row.get("Enabled") or "").strip() else
                               not yes(row.get("Do Not Contact")))
-                    is_new, added_links = group_import.import_contact_record(
+                    is_new, added_links, was_restored = group_import.import_contact_record(
                         db, data, user["admin_id"], selected_groups,
                         consent=yes(row.get("Opt In") or row.get("Consent")),
-                        enabled=active,
+                        enabled=active, restore_archived=True,
                     )
                     db.execute("RELEASE SAVEPOINT import_contact")
                     known_groups.update(pending_groups)
@@ -675,6 +675,8 @@ async def import_contacts(request: Request, csrf: str = Form(""),
                     imported_group_ids.update(selected_groups)
                     if is_new:
                         created += 1
+                    elif was_restored:
+                        restored += 1
                     elif added_links:
                         linked += 1
                     else:
@@ -687,14 +689,16 @@ async def import_contacts(request: Request, csrf: str = Form(""),
                     skipped_reasons[reason] = skipped_reasons.get(reason, 0) + 1
             db.commit()
         message = (
-            f"Imported {created} contacts; linked {linked} existing contacts; "
+            f"Imported {created} contacts; restored {restored} removed contacts; "
+            f"linked {linked} existing contacts; "
             f"{unchanged} already present; {skipped} skipped; "
             f"{new_groups} groups created."
         )
         if skipped:
             reason = max(skipped_reasons, key=skipped_reasons.get)
             message += f" Main skip reason: {reason[:85]}."
-        message += " Existing consent and disabled settings were preserved."
+        message += (" Existing active contacts were unchanged; restored contacts "
+                    "are enabled but require new messaging consent.")
         target = "/contacts"
         if requested_group:
             group_id = known_groups.get(requested_group.casefold())
@@ -835,9 +839,10 @@ def import_group_scan_action(request: Request, scan_token: str,
     return redirect(
         f"/contacts/groups/{summary.group_id}",
         f"Group {'created' if summary.created_group else 'reused'}: "
-        f"{summary.created} contacts added, {summary.linked_existing} existing contacts linked, "
+        f"{summary.created} contacts added, {summary.restored} removed contacts restored, "
+        f"{summary.linked_existing} existing contacts linked, "
         f"{summary.already_in_group} already in group, {summary.skipped} skipped. "
-        "New contacts are not opted in. No messages were sent.",
+        "New and restored contacts have no messaging consent. No messages were sent.",
     )
 
 

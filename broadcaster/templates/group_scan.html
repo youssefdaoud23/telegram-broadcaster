@@ -32,9 +32,9 @@
   {% if scan.members|length <= direct_import_limit %}
   <div class="scan-direct-import">
     <h3>Import directly into a contact group</h3>
-    <p class="subtle">Create or reuse a contact group named after this Telegram group. Existing contacts are linked without losing their other group memberships. Imported members have no messaging consent by default.</p>
+    <p class="subtle">Create or reuse a contact group named after this Telegram group. Existing contacts are linked without losing their other memberships. Previously removed matching contacts are restored to the active list with messaging consent reset to No consent. No messages are sent.</p>
     <form method="post" action="/groups/scans/{{ scan.token }}/import" class="scan-import-form"
-      data-confirm="Import these scanned members into your contacts? New contacts will not be opted in, and no messages will be sent.">
+      data-confirm="Import these scanned members? Previously removed matching contacts will be restored as active with No consent; existing active contacts keep their permissions. No messages will be sent.">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label for="scan-contact-group-name">Contact group name</label>
       <input id="scan-contact-group-name" name="group_name" required maxlength="64" value="{{ suggested_group_name }}">

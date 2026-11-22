@@ -1,10 +1,22 @@
 # Telegram Broadcaster - Status and plan
 
+## Archived contact re-import recovery (2026-11-22)
+- [x] Reproduce the bug: removed contacts are soft-archived, so subsequent direct imports skip every matching member.
+- [x] Restore matching archived contacts only on explicit scan or CSV import, reusing their original IDs and preserving previous groups/history.
+- [x] Reset restored records to consent=0 and enabled=1; audit transitions from previously opted-in records.
+- [x] Preserve matching identity safeguards and owner isolation; do not revive conflicting records.
+- [x] Report restored counts separately from new/linked/already/skipped.
+- [x] Document restoration on import pages and confirmation prompt.
+- [ ] Verify 100+ offline tests, clean-install Docker CI, and review archived-contact regression coverage.
+- [ ] Deploy only following a verified SQLite backup and no-active-broadcast check.
+- [ ] After deployment, repeat the original group scan and explicit import. Previously removed contacts should show restored, not skipped.
+
 ## CSV / direct import reconciliation fix (2026-11-22)
 - [x] Use one owner-scoped, conflict-aware contact matcher for both CSV and direct Telegram scan imports.
 - [x] Link recognized existing contacts to requested groups; preserve all unrelated memberships and consent/disabled flags.
 - [x] Allow manual CSV import into a named new/existing group and emit Telegram Group metadata in scan CSV exports.
-- [x] Honor Enabled during CSV creation, preserve existing contact settings, and never revive archived contacts.
+- [x] Honor Enabled during CSV creation and preserve existing active-contact settings.
+- [x] Explicit re-import can safely restore archived matches without granting consent.
 - [x] Stop silently truncating CSV files after 1,000 rows; reject more than 5,000 before any database writes.
 - [x] Report created, linked, unchanged, skipped and group creation counts.
 - [x] Clarify that group-editor contact list contains ALL workspace contacts, not only members.
