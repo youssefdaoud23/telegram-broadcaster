@@ -44,4 +44,4 @@ Do not use the system to send unsolicited bulk private messages. When a campaign
 
 ## License
 
-This repository has no software license file at present. A public repository is not the same as permission to redistribute or modify the software. The owner should select and publish an explicit license before offering broad third-party use.
+The original project code and documentation are released under the [MIT License](../LICENSE), copyright (c) 2026 Youssef Daoud. Reuse and redistribution require retaining the copyright and permission notice. The license provides no warranty and does not grant access to other people's Telegram accounts or personal information. Third-party dependencies remain subject to their own licenses.

@@ -211,6 +211,6 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [x] Add GitHub Actions unit and clean-install smoke test workflow.
 - [x] Verify default/named-volume Compose config and offline installer.
 - [ ] Observe first GitHub Actions Docker smoke on the published commit.
-- [ ] Maintainer must decide and publish an explicit software license.
+- [x] Publish the owner-selected MIT License with clear copyright attribution.
 - [ ] Do not deploy to existing /opt installation without separate approval,
       database backup, and no-active-sends checks.

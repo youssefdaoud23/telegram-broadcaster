@@ -254,3 +254,13 @@ smoke test with sending disabled. Do not deploy, restart or touch /opt
 production as a side effect of editing the public installation guide.
 No LICENSE existed at audit; the maintainer must choose a software
 license before third parties have explicit use/redistribution rights.
+
+
+## Public MIT License (2026-11-22)
+
+The repository owner selected the MIT License for public reuse. The root
+LICENSE uses copyright (c) 2026 Youssef Daoud. The README and security
+documentation link to it. Reusers must retain the notice; the project
+provides no warranty. Third-party dependency licenses remain separate.
+This is a repository-only change. Do not rebuild or restart production
+as a side effect of changing the license.

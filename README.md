@@ -109,6 +109,6 @@ For Windows PowerShell, activate the virtual environment using `.venv\Scripts\Ac
 
 The default Compose image uses Python 3.12, FastAPI, Telethon 1.x, Jinja2, and SQLite. The first-run helper requires only Python's standard library.
 
-## Licensing
+## License
 
-This repository currently has **no license file**. Public visibility on GitHub does not itself grant permission to redistribute or reuse the code. The repository owner must choose and add a license before offering general third-party deployment under an explicit software license.
+Telegram Broadcaster is available under the [MIT License](LICENSE), copyright (c) 2026 Youssef Daoud. You may use, copy, modify and redistribute the software, including commercially, provided you retain the copyright and license notice. The software is provided without warranty. Third-party dependencies retain their respective licenses.
