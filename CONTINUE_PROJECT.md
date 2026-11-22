@@ -80,8 +80,11 @@ Before making any changes:
 23. Direct import from a scanned Telegram group uses
     POST /groups/scans/{token}/import. This creates/reuses a private
     contact group with the same name, reuses matching existing contacts
-    safely, never resurrects archived records or changes consent, and
-    performs no sends. Telegram User IDs are retained in scan exports and
+    safely, and restores previously archived matching contacts only through
+    an explicit user-triggered import. Restored records reuse original IDs,
+    set archived=0, enabled=1 and consent=0, with prior opt-in withdrawal
+    audited when needed. Active contacts keep their consent; imports do not
+    send messages. Telegram User IDs are retained in scan exports and
     may resolve only through the original sender's entity cache/access
     hash; never claim all users are messageable. The Contacts page also
     has an additive/removal bulk group membership action. Preserve
