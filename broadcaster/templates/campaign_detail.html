@@ -6,7 +6,7 @@
 <div class="divider-line"></div>
 <div class="detail-stats"><div><strong>{{ campaign['total'] }}</strong><small>Recipients</small></div><div><strong>{{ counts.get('sent',0) }}</strong><small>Sent</small></div><div><strong>{{ counts.get('failed',0) + counts.get('blocked',0) }}</strong><small>Failed / blocked</small></div></div>
 {% if campaign['state']=='draft' %}
-<div class="alert alert-neutral">Review the message and recipients. Sending requires one click below—no confirmation phrase.</div>
+<div class="alert alert-neutral">Review the message and recipients. Sending requires one click below-no confirmation phrase.</div>
 <form method="post" action="/campaigns/{{ campaign['id'] }}/send" data-confirm="Send this message separately to the listed opted-in recipients?"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-primary" {% if not send_enabled %}disabled title="Sending disabled by server settings"{% endif %}>Send {{ campaign['total'] }} private message{% if campaign['total']!=1 %}s{% endif %}</button></form>
 {% if not send_enabled %}<small class="subtle">Sending is disabled in server settings. Drafting and previewing are available.</small>{% endif %}
 {% elif campaign['state'] in ['queued','sending'] %}<div class="alert alert-neutral">Delivery is in progress. This page refreshes automatically.</div><span id="campaign-refresh" data-active="true"></span>
@@ -21,7 +21,7 @@
 <p class="subtle">{{ retryable }} pending, opted-in recipient{% if retryable != 1 %}s{% endif %} can be copied into a new draft. Review it before sending. This button never sends a message.</p>
 <form method="post" action="/campaigns/{{ campaign['id'] }}/retry">
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <button type="submit" class="btn btn-secondary">Try again — create draft</button>
+  <button type="submit" class="btn btn-secondary">Try again - create draft</button>
 </form>
 {% else %}
 <p class="subtle">No safely retryable pending recipients remain. Review the individual delivery states before creating another broadcast manually.</p>

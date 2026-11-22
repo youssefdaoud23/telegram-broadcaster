@@ -45,7 +45,7 @@
     if (senderSelect && senderLabel) {
       const syncSender = () => {
         const selected = senderSelect.options[senderSelect.selectedIndex];
-        senderLabel.textContent = selected && selected.value ? selected.textContent.split(" — ")[0] : "Private message preview";
+        senderLabel.textContent = selected && selected.value ? selected.textContent.split(" - ")[0] : "Private message preview";
       };
       senderSelect.addEventListener("change", syncSender);
       syncSender();

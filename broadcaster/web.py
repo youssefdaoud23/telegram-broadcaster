@@ -24,7 +24,7 @@ app = FastAPI(title="Telegram Broadcaster", docs_url=None, redoc_url=None, opena
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
 templates.env.filters["moment"] = (
-    lambda x: datetime.fromtimestamp(x, tz=timezone.utc).strftime("%d %b %Y · %H:%M UTC") if x else "—"
+    lambda x: datetime.fromtimestamp(x, tz=timezone.utc).strftime("%d %b %Y · %H:%M UTC") if x else "-"
 )
 
 

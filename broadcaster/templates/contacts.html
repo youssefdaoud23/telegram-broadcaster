@@ -6,7 +6,7 @@
     <form class="search-row" action="/contacts" method="get"><input name="q" value="{{ query }}" placeholder="Search by name, username, or phone…"><button class="btn btn-secondary">Search</button></form>
     <div class="table-scroll"><table class="contacts-table"><thead><tr><th>Contact</th><th>Telegram identifier</th><th>Eligibility</th><th></th></tr></thead><tbody>
     {% for c in contacts %}
-    <tr><td><div class="person-cell"><span class="contact-avatar">{{ c['name'][:1]|upper }}</span><div><a class="table-primary" href="/contacts/{{ c['id'] }}/edit">{{ c['name'] }}</a><div class="table-secondary">{{ c['notes'][:60] or '—' }}</div></div></div></td>
+    <tr><td><div class="person-cell"><span class="contact-avatar">{{ c['name'][:1]|upper }}</span><div><a class="table-primary" href="/contacts/{{ c['id'] }}/edit">{{ c['name'] }}</a><div class="table-secondary">{{ c['notes'][:60] or '-' }}</div></div></div></td>
     <td><span class="mono">{{ c['username'] or c['phone'] or c['user_id'] }}</span></td>
     <td>{% if not c['enabled'] %}<span class="status status-muted">Disabled</span>{% elif c['consent'] %}<span class="status status-connected">Opted in</span>{% else %}<span class="status status-pending">No consent</span>{% endif %}</td>
     <td class="actions-cell"><a class="icon-button" title="Edit" href="/contacts/{{ c['id'] }}/edit">Edit</a>

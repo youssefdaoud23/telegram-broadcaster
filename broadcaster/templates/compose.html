@@ -22,7 +22,7 @@
   <div class="field-section"><span class="step-number">01</span><div><h2>Sending account</h2><p class="subtle">Choose which of your connected accounts sends the message.</p></div></div>
   {% if accounts %}
     <label class="sr-only" for="account_id">Sending account</label>
-    <select id="account_id" name="account_id" required><option value="">Choose an account</option>{% for a in accounts %}<option value="{{ a['id'] }}">{{ a['label'] }} — {{ a['username'] or 'Connected' }}</option>{% endfor %}</select>
+    <select id="account_id" name="account_id" required><option value="">Choose an account</option>{% for a in accounts %}<option value="{{ a['id'] }}">{{ a['label'] }} - {{ a['username'] or 'Connected' }}</option>{% endfor %}</select>
   {% else %}<div class="alert alert-warning">Connect a Telegram account before composing. <a href="/accounts/new">Connect now →</a></div>{% endif %}
   <div class="field-section spaced"><span class="step-number">02</span><div><h2>Your message</h2><p class="subtle">Every selected contact receives this as an individual Telegram message.</p></div></div>
   <textarea id="compose-message" name="message" rows="9" maxlength="4096" required placeholder="Hi there! I wanted to share an update with you…"></textarea>

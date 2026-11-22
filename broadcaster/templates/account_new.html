@@ -14,7 +14,7 @@
   <section class="panel"><span class="eyebrow accent">STEP 2 OF 2</span><h2>Save your Telegram account</h2><p class="subtle">Once saved, we'll request a Telegram verification code.</p>
     <form action="/accounts/new" method="post" class="stack-form">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <label>Account label</label><input name="label" maxlength="60" required placeholder="e.g. Personal — Joe">
+      <label>Account label</label><input name="label" maxlength="60" required placeholder="e.g. Personal - Joe">
       <div class="input-grid"><div><label>Telegram API ID</label><input name="api_id" inputmode="numeric" required placeholder="12345678" autocomplete="off"></div><div><label>Phone number</label><input name="phone" required placeholder="+420…" autocomplete="tel"></div></div>
       <label>Telegram API Hash</label><input name="api_hash" type="password" maxlength="32" minlength="32" autocomplete="new-password" required placeholder="32-character API hash">
       <label>Expected username <span class="optional">(recommended)</span></label><input name="expected_username" placeholder="@myaccount" autocomplete="off">

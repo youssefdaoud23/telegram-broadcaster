@@ -4,7 +4,7 @@
 
 A secure web app replacing the cumbersome n8n-based Telegram broadcast UI, with local CRUD contact database, multi-account Telegram user sessions, guided API credentials setup, messaging composer, and delivery history.
 
-Canonical GitHub: https://github.com/youssefdaoud23/telegram-broadcaster (PUBLIC — no secrets or personal data).
+Canonical GitHub: https://github.com/youssefdaoud23/telegram-broadcaster (PUBLIC - no secrets or personal data).
 Development branch: feature/initial-dashboard.
 
 ## Existing services: preserve

@@ -1,4 +1,4 @@
-/* Telegram Web-inspired interface — locally authored, no external assets.
+/* Telegram Web-inspired interface - locally authored, no external assets.
    Keeps the existing app functionality and protected routes unchanged. */
 :root {
   color-scheme: light;
@@ -425,7 +425,7 @@ label { color: var(--tg-text); }
 }
 .history-actions .text-link { white-space: nowrap; }
 
-/* User Management — follows the existing Telegram day/night variables. */
+/* User Management - follows the existing Telegram day/night variables. */
 .user-management-list { display:flex; flex-direction:column; gap:16px; }
 .user-management-entry {
   padding:16px 0; border-bottom:1px solid var(--tg-outline);

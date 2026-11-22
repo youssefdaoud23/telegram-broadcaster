@@ -1,4 +1,4 @@
-# Telegram Broadcaster — Status and plan
+# Telegram Broadcaster - Status and plan
 
 - [x] Inspect canonical GitHub repo and initialize feature branch.
 - [x] Add isolated Docker environment, safe configuration template, and local-only port.
