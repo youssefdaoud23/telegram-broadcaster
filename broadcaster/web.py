@@ -552,10 +552,15 @@ def edit_group_page(request: Request, group_id: int):
         membership=core.contact_group_map(db,user["admin_id"])
     if group is None:
         raise HTTPException(404,"Contact group not found")
-    return render(request,"contact_group_edit.html",title="Manage group",
-                  group=group,contacts=rows,members={
-                      row["id"] for row in rows if group_id in membership.get(row["id"],set())
-                  })
+    member_ids={
+        row["id"] for row in rows if group_id in membership.get(row["id"],set())
+    }
+    return render(
+        request, "contact_group_edit.html", title="Manage group",
+        group=group, contacts=[row for row in rows if row["id"] in member_ids],
+        available_contacts=[row for row in rows if row["id"] not in member_ids],
+        members=member_ids,
+    )
 
 
 @app.post("/contacts/groups/{group_id}/rename")
@@ -569,6 +574,31 @@ def rename_group_action(request: Request, group_id: int,
     except ValueError as exc:
         return redirect("/contacts/groups",str(exc))
     return redirect(f"/contacts/groups/{group_id}","Group renamed.")
+
+
+@app.post("/contacts/groups/{group_id}/members/{action}")
+async def update_group_members_additive(request: Request, group_id: int, action: str):
+    """Adjust only chosen contacts in this group; never replace the full list."""
+    user=principal(request)
+    form=await request.form(max_fields=6000)
+    authorize(request, str(form.get("csrf", "")))
+    if action not in ("add", "remove"):
+        raise HTTPException(404, "Unsupported membership operation")
+    try:
+        contact_ids=[int(str(item)) for item in form.getlist("contacts")]
+        with core.database() as db:
+            changed=core.bulk_update_group_members(
+                db, user["admin_id"], group_id, contact_ids,
+                remove=(action=="remove"),
+            )
+            db.commit()
+    except (ValueError,TypeError) as exc:
+        return redirect(f"/contacts/groups/{group_id}", str(exc))
+    return redirect(
+        f"/contacts/groups/{group_id}",
+        f"{changed} contact(s) {'removed from' if action=='remove' else 'added to'} "
+        "this group. Their contact records, other groups and Active settings were preserved.",
+    )
 
 
 @app.post("/contacts/groups/{group_id}/members")
