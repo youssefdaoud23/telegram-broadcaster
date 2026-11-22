@@ -105,6 +105,18 @@ Before making any changes:
      a username or group membership is not automatic private-message consent.
      Sending still requires consent and enabled status; never bypass that.
 
+23c. Group management and phone backfill (2026-11-22): group page is a
+     scoped list of actual members only, with searchable Add contacts picker
+     listing out-of-group contacts and a separate selected-member Remove
+     action. POST /contacts/groups/{id}/members/{add|remove} uses the
+     owner-scoped additive/removal membership helper; no implicit replace on
+     save. Existing Active controls and phone/Telegram ID fields remain.
+     On direct and CSV reimport, safely matched existing contacts may have
+     missing phone, username or numeric ID filled only if the incoming
+     identifier is present and non-conflicting; never overwrite nonempty
+     fields, names, notes, consent or enabled. Telegram privacy may hide
+     phone numbers, which cannot be recovered if absent in the source.
+
 23b. Import-default policy (2026-11-22): direct Telegram scan imports and CSV
      imports create new contacts with enabled=0, even when CSV Enabled=yes.
      Explicit import restoration of archived records also uses enabled=0,
