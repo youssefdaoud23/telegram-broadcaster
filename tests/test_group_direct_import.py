@@ -178,8 +178,8 @@ class DirectGroupImportTests(unittest.TestCase):
         with core.database() as db:
             cid=db.execute("SELECT id FROM contacts WHERE owner_id=?",
                            (self.owner_id,)).fetchone()["id"]
-        raw=("Name,Username,Phone Number,Telegram User ID,Telegram Group\\n"
-             "Customer New,@new_user55,+420777123456,123456789,Prague Customers\\n")
+        raw=("Name,Username,Phone Number,Telegram User ID,Telegram Group\n"
+             "Customer New,@new_user55,+420777123456,123456789,Prague Customers\n")
         result=self.http.post(
             "/contacts/import",data={"csrf":self.csrf},
             files={"file":("members.csv",raw.encode("utf-8"),"text/csv")},
