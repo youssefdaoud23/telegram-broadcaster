@@ -39,7 +39,7 @@ def _data_for_member(member: group_export.ExportMember) -> dict[str, str]:
 
 def import_contact_record(
     db: sqlite3.Connection, data: dict[str, str], owner_id: int,
-    group_ids: list[int], *, consent: bool = False, enabled: bool = False,
+    group_ids: list[int], *, consent: bool = False,
     restore_archived: bool = False,
 ) -> tuple[bool, int, bool]:
     """Create, reuse or explicitly restore a safely matched contact.
@@ -106,7 +106,7 @@ def import_contact_record(
             )
     else:
         contact_id = core.insert_contact(
-            db, data, owner_id, consent=consent, enabled=enabled,
+            db, data, owner_id, consent=consent, enabled=False,
         )
     added_links = 0
     for group_id in sorted(group_ids):
@@ -142,7 +142,7 @@ def import_scan_members(db: sqlite3.Connection, scan: group_export.GroupScan,
         try:
             data = _data_for_member(member)
             is_new, new_links, was_restored = import_contact_record(
-                db, data, owner_id, [group_id], consent=False, enabled=False,
+                db, data, owner_id, [group_id], consent=False,
                 restore_archived=True,
             )
             if is_new:
