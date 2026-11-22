@@ -640,8 +640,14 @@ async def import_contacts(request: Request, csrf: str = Form(""),
                     # Telegram Group metadata in scan-generated CSV files.
                     automatic_name = requested_group
                     if not automatic_name and (row.get("Telegram Group") or "").strip():
+                        raw_group_name = row["Telegram Group"].strip()
+                        # Undo the spreadsheet-formula escape added by our
+                        # own group CSV exporter before validating its name.
+                        if (raw_group_name.startswith("'") and
+                                raw_group_name[1:].lstrip().startswith(("=", "+", "-", "@"))):
+                            raw_group_name = raw_group_name[1:]
                         automatic_name = group_export.suggested_group_name(
-                            row["Telegram Group"]
+                            raw_group_name
                         )
                     if automatic_name:
                         key = automatic_name.casefold()
@@ -801,7 +807,7 @@ def group_scan_csv(request: Request, scan_token: str):
         # Neutralize formula-like names when opened in spreadsheet apps.
         writer.writerow([_csv_safe_name(member.name), member.username,
                          member.phone, member.user_id,
-                         group_export.suggested_group_name(scan.group_title)])
+                         _csv_safe_name(group_export.suggested_group_name(scan.group_title))])
     return StreamingResponse(
         iter([output.getvalue().encode("utf-8-sig")]),
         media_type="text/csv; charset=utf-8",
