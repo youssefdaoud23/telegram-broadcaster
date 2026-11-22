@@ -12,8 +12,9 @@
   <div class="panel-head"><h2>Member scan</h2></div>
   <div class="detail-stats group-scan-stats">
     <div><strong>{{ scan.seen }}</strong><small>Members inspected</small></div>
+    <div><strong>{{ scan.members|length }}</strong><small>Members exportable</small></div>
     <div><strong>{{ scan.usernames|length }}</strong><small>Unique usernames</small></div>
-    <div><strong>{{ scan.missing_username }}</strong><small>No public username</small></div>
+    <div><strong>{{ scan.phone_count }}</strong><small>Phones visible</small></div>
     <div><strong>{{ scan.skipped_bots }}</strong><small>Bots / deleted</small></div>
   </div>
   {% if scan.state in ('queued','running') %}
@@ -22,19 +23,27 @@
   {% elif scan.state=='complete' %}
   <div class="alert alert-success">The accessible member scan finished. Telegram might still hide or restrict some members, so the result is not a guarantee of complete group membership.</div>
   {% else %}
-  <div class="alert alert-warning" role="alert">{{ scan.error or "The scan was not completed." }}{% if scan.usernames %} Any available export is partial and may omit members.{% endif %}</div>
+  <div class="alert alert-warning" role="alert">{{ scan.error or "The scan was not completed." }}{% if scan.members %} Any available export is partial and may omit members.{% endif %}</div>
   {% endif %}
-  {% if scan.state in ('complete','partial','limited') and scan.usernames %}
-  <div class="form-actions"><a class="btn btn-primary" href="/groups/scans/{{ scan.token }}/export">Download {{ scan.usernames|length }} usernames as CSV</a>
+  {% if scan.state in ('complete','partial','limited') and scan.members %}
+  <div class="form-actions"><a class="btn btn-primary" href="/groups/scans/{{ scan.token }}/export">Download {{ scan.members|length }} members as CSV</a>
     <a class="btn btn-outline" href="/groups">Scan another group</a></div>
-  <p class="subtle">CSV contains only usernames, without @, IDs, phone numbers, or consent flags. Results are held temporarily in server memory and expire after 30 minutes.</p>
+  <p class="subtle">CSV columns: Name, Username, Phone Number. Unavailable usernames and phone numbers remain blank. Only details visible to this Telegram account are exported. Results expire after 30 minutes in server memory.</p>
   {% elif scan.state=='failed' %}<a class="btn btn-outline" href="/groups">Choose another group</a>{% endif %}
 </section>
 {% if sample %}
 <section class="panel" style="max-width:950px">
-  <div class="panel-head"><h2>Username preview <span class="count-pill">{{ sample|length }} shown</span></h2></div>
-  <div class="group-usernames">
-    {% for username in sample %}<span class="group-username">@{{ username }}</span>{% endfor %}
+  <div class="panel-head"><h2>Member preview <span class="count-pill">{{ sample|length }} shown</span></h2></div>
+  <div class="table-scroll">
+    <table class="group-member-table">
+      <thead><tr><th>Name</th><th>Username</th><th>Phone Number</th></tr></thead>
+      <tbody>
+      {% for member in sample %}
+      <tr><td>{{ member.name or '-' }}</td><td>{{ ('@' ~ member.username) if member.username else '-' }}</td>
+        <td>{{ member.phone if member.phone else 'Not visible' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
 {% endif %}

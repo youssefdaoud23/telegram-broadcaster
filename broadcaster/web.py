@@ -428,7 +428,7 @@ async def group_export_page(request: Request, account_id: str = ""):
         except telegram.TelegramProblem as exc:
             error = str(exc)
     return render(
-        request, "groups.html", title="Group username export",
+        request, "groups.html", title="Group member export",
         accounts=accounts, account_id=account_id, groups=groups, error=error,
         dialog_limit=group_export.DIALOG_SCAN_LIMIT,
     )
@@ -456,8 +456,13 @@ def group_scan_page(request: Request, scan_token: str):
         raise HTTPException(404, "Group scan not found or expired")
     return render(
         request, "group_scan.html", title="Group scan results",
-        scan=scan, sample=scan.usernames[:40],
+        scan=scan, sample=scan.members[:40],
     )
+
+
+def _csv_safe_name(value: str) -> str:
+    """Prevent spreadsheet formula execution in a user-supplied display name."""
+    return "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value
 
 
 @app.get("/groups/scans/{scan_token}/export")
@@ -466,18 +471,19 @@ def group_scan_csv(request: Request, scan_token: str):
     scan = group_export.get_scan(scan_token, user["admin_id"])
     if scan is None:
         raise HTTPException(404, "Group scan not found or expired")
-    if scan.state not in ("complete", "partial", "limited") or not scan.usernames:
-        raise HTTPException(409, "No usernames are ready for export")
+    if scan.state not in ("complete", "partial", "limited") or not scan.members:
+        raise HTTPException(409, "No group member details are ready for export")
     output = io.StringIO(newline="")
     writer = csv.writer(output)
-    writer.writerow(["username"])
-    for username in sorted(scan.usernames, key=str.casefold):
-        # These have already been validated against Telegram username syntax.
-        writer.writerow([username])
+    writer.writerow(["Name", "Username", "Phone Number"])
+    for member in sorted(scan.members, key=lambda m: (m.name.casefold(), m.username.casefold())):
+        # Only Telegram-visible data. Missing usernames/phone numbers stay blank.
+        # Names can contain arbitrary text, so neutralize spreadsheet formulas.
+        writer.writerow([_csv_safe_name(member.name), member.username, member.phone])
     return StreamingResponse(
         iter([output.getvalue().encode("utf-8-sig")]),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="telegram-group-usernames.csv"',
+        headers={"Content-Disposition": 'attachment; filename="telegram-group-members.csv"',
                  "X-Group-Scan-State": scan.state},
     )
 

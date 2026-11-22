@@ -127,7 +127,7 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [ ] Grant Joe MCP /opt workspace access separately if future maintenance
       through Joe MCP is desired.
 
-## Telegram group username export (2026-11-22)
+## Telegram group member export (2026-11-22)
 
 - [x] Add Group export page to sidebar, with owner-scoped connected account
       selection, recent regular groups and supergroups, and no direct-chat scans.
@@ -135,8 +135,10 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
       arbitrary group IDs or joining groups.
 - [x] Launch read-only member scan with bounded concurrency, progress, and
       a 240-second timeout. Detect limited and partial responses.
-- [x] Export deduplicated publicly visible non-bot usernames as a CSV, with
-      no phone numbers, Telegram user IDs, private messages, or consent flags.
+- [x] Export accessible non-bot group members as CSV with Name, Username
+      and Phone Number fields, leaving missing Telegram fields blank. Include
+      name-only members; never infer hidden phone numbers or import contacts.
+      Telegram user IDs remain internal for deduplication only.
 - [x] Protect all scans and CSV downloads with workspace ownership, and
       require CSRF on scan creation. Do not add contacts or send messages.
 - [x] Hold results only in memory for 30 minutes; no migration or new tables.
@@ -156,3 +158,16 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [x] Add regression checks for CSS, HTML and group list data rendering.
 - [ ] Pull and rebuild production only when no campaign is sending;
       confirm normal group list appearance in desktop and mobile browsers.
+
+
+## Group member CSV fields (2026-11-22)
+
+- [x] Include Telegram-visible first and last name, username, and phone.
+- [x] Include members without a username if they have a visible name/phone.
+- [x] Normalize valid international phone digits and leave hidden values blank.
+- [x] Deduplicate by Telegram account user ID; no phone lookups or added API calls.
+- [x] Show name, username, and phone columns in member preview and CSV.
+- [x] Prevent spreadsheet-formula execution in attacker-controlled display names.
+- [x] Preserve read-only/no-send behavior, workspace isolation and CSV authorization.
+- [x] Run offline tests for visible/hidden phones and name-only members.
+- [ ] Deploy to /opt/telegram-broadcaster when no sends are active.

@@ -524,3 +524,10 @@ label { color: var(--tg-text); }
 .group-scan-stats > div {min-width:125px;flex:1;}
 .group-usernames {display:flex;gap:8px;flex-wrap:wrap;}
 .group-username {padding:6px 11px;background:var(--tg-surface-alt);border:1px solid var(--tg-outline);border-radius:12px;overflow-wrap:anywhere;}
+
+.group-scan-stats { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+
+/* Readable three-column member preview, with scroll on small screens. */
+.group-member-table { min-width: 560px; }
+.group-member-table td { overflow-wrap: anywhere; }
+.group-member-table td:last-child { font-family: ui-monospace, Consolas, monospace; }

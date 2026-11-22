@@ -17,8 +17,10 @@ Before making any changes:
 12. Previous campaign reuse is an explicit new draft, not automatic message resend. Account/recipient consent and owner checks apply to reuse and edit. Submitted campaigns are immutable; only unsent drafts can be edited in place. Unknown or sent statuses require deliberate recipient selection and independent Send.
 
 13. Group export is a read-only, owner-scoped tool at /groups. It reads only
-    Telegram groups exposed to the user's connected account, exports only
-    public usernames, and never imports contacts, changes opt-in, sends
-    messages, joins groups or scans private chats. Preserve limits and
-    partial-result warnings. Do not collect real member data without an
-    explicit user-selected group.
+    Telegram groups exposed to the user's connected account and exports
+    Name, Username and Phone Number only when those fields are visible
+    in Telethon User objects. Hidden phone numbers must remain blank.
+    Never infer or look up phone numbers, import contacts, change opt-in,
+    send messages, join groups or scan private chats. Preserve limits,
+    cross-workspace protection and partial-result warnings. Do not scan
+    real group data without an explicit user-selected group.

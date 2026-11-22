@@ -13,7 +13,7 @@ Self-hosted personal Telegram messaging dashboard with a beautiful browser UI, S
 
 **The GitHub repository is public. NEVER commit .env, Telegram session files, customer contacts, database files, API hashes, phone numbers, credentials or delivery logs.**
 
-## Export usernames from Telegram groups
+## Export member names, usernames and visible phone numbers from Telegram groups
 
 Open **Group export** in the sidebar. Choose one of your own **connected**
 Telegram accounts and click **Load my groups**. The site reads up to the
@@ -22,18 +22,33 @@ and supergroups. Private one-to-one chats and broadcast-only channels are not
 listed. Select a group and click **Scan selected group**.
 
 A read-only Telegram member scan starts in the background. The results page
-refreshes automatically and displays the number of returned members,
-non-bot users with accessible public usernames, skipped bots/deleted users,
-and users without usable usernames. When it finishes, click
-**Download usernames as CSV**. The CSV contains exactly one column,
-`username`, with the @ prefix omitted. Exported usernames are
-deduplicated case-insensitively. The export does not contain phone numbers,
-Telegram user IDs, messages, or private profile details.
+refreshes automatically and displays how many members were inspected, how
+many can be exported, how many phone numbers were visible, and how many
+bots/deleted accounts were skipped. When it finishes, click **Download
+members as CSV**. The CSV contains the columns **Name**, **Username**, and
+**Phone Number**. Names combine the first and last name returned by Telegram,
+and usernames omit the @ prefix. Members without usernames are still
+included if another field is visible.
+
+Phone numbers come **only** from the member's Telegram User object as
+returned to the connected account. Telegram often hides group members'
+phone numbers, especially when they are not already in your contacts.
+Unavailable values remain blank. The application does not use phone
+lookup services, import your contact list, infer numbers, or override
+Telegram privacy settings. Phone numbers are normalized with a leading
++ when supplied as valid international digits. Display names are
+neutralized against spreadsheet-formula injection. Import the phone
+column as **text** in spreadsheet software to avoid losing the + or
+long-number precision.
+
+Members are deduplicated by Telegram user ID in memory (IDs never
+appear in the CSV); usernames are counted case-insensitively.
+No private messages or profile histories are exported.
 
 **A group member has not automatically consented to receiving direct
-marketing messages.** Exporting a username does not import the user into
-Contacts and does not mark the user opted in. Any later use of the usernames
-must comply with your consent and applicable privacy rules.
+marketing messages.** Exporting their name, username or phone number does
+not import them into Contacts or mark them opted in. Handle the resulting
+personal data under applicable privacy and consent requirements.
 
 Telegram may not expose all members of large or private groups. The
 `iter_participants` API can return a partial list or require administrative

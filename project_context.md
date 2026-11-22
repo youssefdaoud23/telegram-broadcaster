@@ -134,7 +134,7 @@ with owner ID checks and an explicit review step. GET/POST
 recipient delivery rows. Existing submitted campaigns are immutable.
 Continue to keep interrupted-campaign Try again limited to pending only.
 
-## Group username export (2026-11-22)
+## Group member export (2026-11-22)
 
 App adds `/groups`, `POST /groups/scans`,
 `GET /groups/scans/{token}` and `GET /groups/scans/{token}/export`.
@@ -142,10 +142,13 @@ Private module `broadcaster/group_export.py` runs Telethon read-only scans
 against groups enumerated from the connected, owner-scoped account's
 recent dialogs (not arbitrary public groups). Regular groups and
 supergroups only. Explicit CSRF before starting a scan. No Telegram
-messages or group joins. Username export contains only deduplicated
-public user handles without @; no phones, user IDs, private messages or
-automatic contact import/consent. Site users cannot read others' scan
-tokens or use their Telegram accounts. Background results live only
+messages or group joins. Member export contains Name, Username, Phone Number
+for fields visible in each Telethon User object. Phone numbers are blank
+when Telegram does not return them; no phone lookup/inference. Members
+without usernames are included if another field is visible. Telegram
+IDs are used only internally for deduplication, not exported. No private
+messages or automatic contact import/consent. Site users cannot read
+others' scan tokens or use their Telegram accounts. Background results live only
 in process memory for 30 minutes; app restarts discard them.
 MAX_SCAN_USERS is 25,000, scan timeout is 240 seconds, one active
 scan per user, 12 stored jobs total. Group enumeration is limited
@@ -170,3 +173,19 @@ explicitly sized radios, text wrapping, keyboard focus and selected
 state styling. Added name search with visible count and no-match state;
 filtering deselects any hidden selected radio. No Telethon/group scan
 behavior or user data is changed. Includes regression tests.
+
+
+## Member export fields and visibility (2026-11-22)
+
+broadcaster/group_export.py: ExportMember(name, username, phone), kept only
+in owner-scoped in-memory GroupScan.members for 30 minutes. Each entity
+already returned by iter_participants supplies first_name, last_name,
+username and phone, when Telegram permits access. No extra lookups are made.
+Telegram user ID deduplicates rows in RAM only. Hidden phone numbers remain
+blank, and visible international digits are formatted with +. Invalid
+phones are omitted rather than guessed. UI preview and CSV show Name,
+Username, Phone Number. API route /groups/scans/{token}/export keeps
+existing auth, status and partial-result safeguards. Sanitize display names
+to prevent spreadsheet formula injection. Do not auto-add group members to
+Contacts or mark consent. New scans are required after deployment because
+previous scans live only in volatile memory.

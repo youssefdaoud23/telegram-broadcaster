@@ -1,4 +1,4 @@
-"""On-demand, read-only Telegram group username exports.
+"""On-demand, read-only Telegram group member exports.
 
 No group data is stored in SQLite or added to broadcasting contacts. Scan
 results remain only in process memory for a short period, scoped to the
@@ -21,6 +21,33 @@ MAX_SCAN_USERS = 25_000
 RESULT_TTL_SECONDS = 30 * 60
 GLOBAL_MAX_JOBS = 12
 
+
+@dataclass(frozen=True)
+class ExportMember:
+    """Only fields visible on Telegram's returned User entity."""
+
+    name: str
+    username: str
+    phone: str
+
+
+def member_name(member) -> str:
+    """Collapse line breaks and controls without inventing unavailable names."""
+    parts = (getattr(member, "first_name", None), getattr(member, "last_name", None))
+    return " ".join(" ".join(str(part).split()) for part in parts if part).strip()[:160]
+
+
+def visible_phone(member) -> str:
+    """Return only a valid Telegram-provided phone, never guess or look it up."""
+    raw = getattr(member, "phone", None)
+    if not isinstance(raw, str):
+        return ""
+    raw = raw.strip()
+    if not re.fullmatch(r"\+?[0-9]{5,20}", raw):
+        return ""
+    return "+" + raw.lstrip("+")
+
+
 @dataclass
 class GroupScan:
     token: str
@@ -33,7 +60,9 @@ class GroupScan:
     seen: int = 0
     missing_username: int = 0
     skipped_bots: int = 0
+    phone_count: int = 0
     usernames: list[str] = field(default_factory=list)
+    members: list[ExportMember] = field(default_factory=list)
     error: str = ""
 
 _scans: dict[str, GroupScan] = {}
@@ -185,6 +214,7 @@ async def _collect(scan: GroupScan) -> None:
                 )
             scan.group_title = (chosen.title or "Unnamed group")[:160]
             seen_usernames: set[str] = set()
+            seen_members: set[tuple[str, int | str]] = set()
             # Explicit cap to protect one server worker and in-memory result
             # storage. This may be lower than Telegram's accessible membership.
             async for member in client.iter_participants(chosen.entity, limit=MAX_SCAN_USERS + 1):
@@ -196,13 +226,31 @@ async def _collect(scan: GroupScan) -> None:
                 if getattr(member, "deleted", False) or getattr(member, "bot", False):
                     scan.skipped_bots += 1
                     continue
-                name = getattr(member, "username", None)
-                if not name or not re.fullmatch(r"[A-Za-z0-9_]{3,32}", name):
+                username = getattr(member, "username", None) or ""
+                if not re.fullmatch(r"[A-Za-z0-9_]{3,32}", username):
+                    username = ""
                     scan.missing_username += 1
+                display_name = member_name(member)
+                phone = visible_phone(member)
+                if not (display_name or username or phone):
                     continue
-                key = name.casefold()
-                if key not in seen_usernames:
-                    seen_usernames.add(key)
-                    scan.usernames.append(name)
+                user_id = getattr(member, "id", None)
+                if isinstance(user_id, int) and user_id > 0:
+                    key: tuple[str, int | str] = ("id", user_id)
+                elif username:
+                    key = ("username", username.casefold())
+                else:
+                    # Real Telegram User entities always have IDs. Retain
+                    # otherwise distinct rows from test clients without IDs.
+                    key = ("seen", scan.seen)
+                if key in seen_members:
+                    continue
+                seen_members.add(key)
+                scan.members.append(ExportMember(display_name, username, phone))
+                if phone:
+                    scan.phone_count += 1
+                if username and username.casefold() not in seen_usernames:
+                    seen_usernames.add(username.casefold())
+                    scan.usernames.append(username)
         finally:
             await client.disconnect()

@@ -1,6 +1,8 @@
 """Offline group export tests. All Telegram API operations are mocked."""
 from __future__ import annotations
 
+import csv
+import io
 import os
 import tempfile
 import time
@@ -39,13 +41,21 @@ class FakeClient:
             SimpleNamespace(id=17, entity=user, title="Direct chat"),
         ]
         self.members = [
-            SimpleNamespace(username="Alice_T", bot=False, deleted=False),
-            SimpleNamespace(username=None, bot=False, deleted=False),
-            SimpleNamespace(username="alice_t", bot=False, deleted=False),
-            SimpleNamespace(username="evil=1", bot=False, deleted=False),
-            SimpleNamespace(username="Bob_123", bot=False, deleted=False),
-            SimpleNamespace(username="BotWriter", bot=True, deleted=False),
-            SimpleNamespace(username="OldUser", bot=False, deleted=True),
+            SimpleNamespace(id=101, first_name="Alice", last_name="Tester",
+                            username="Alice_T", phone="420777000111", bot=False, deleted=False),
+            SimpleNamespace(id=102, first_name="No", last_name="Handle",
+                            username=None, phone=None, bot=False, deleted=False),
+            SimpleNamespace(id=101, first_name="Alice", last_name="Tester",
+                            username="alice_t", phone="420777000111", bot=False, deleted=False),
+            SimpleNamespace(id=103, first_name='=HYPERLINK("https://example.invalid","click")',
+                            last_name="", username="evil=1", phone="=123",
+                            bot=False, deleted=False),
+            SimpleNamespace(id=104, first_name="Bob", last_name="Smith",
+                            username="Bob_123", phone="+12025550123", bot=False, deleted=False),
+            SimpleNamespace(id=105, first_name="Spam", last_name="Bot",
+                            username="BotWriter", phone="420111111111", bot=True, deleted=False),
+            SimpleNamespace(id=106, first_name="Deleted", last_name="User",
+                            username="OldUser", phone="420222222222", bot=False, deleted=True),
         ]
         self.fail_after = None
 
@@ -146,6 +156,17 @@ class GroupExportFeatureTests(unittest.TestCase):
         self.assertIn('id="group-no-match"',page.text)
         self.fake.send_message.assert_not_awaited()
 
+    def test_optional_phone_never_guesses_invalid_or_missing_values(self):
+        from broadcaster.group_export import visible_phone, member_name
+        self.assertEqual(visible_phone(SimpleNamespace(phone=None)), "")
+        self.assertEqual(visible_phone(SimpleNamespace(phone=420123456)), "")
+        self.assertEqual(visible_phone(SimpleNamespace(phone="=1+1")), "")
+        self.assertEqual(visible_phone(SimpleNamespace(phone="420123456789")), "+420123456789")
+        self.assertEqual(visible_phone(SimpleNamespace(phone="+420123456789")), "+420123456789")
+        self.assertEqual(member_name(SimpleNamespace(first_name=" Anna  ", last_name=" Smith  ")),
+                         "Anna Smith")
+        self.fake.send_message.assert_not_awaited()
+
     def test_group_selection_layout_keeps_radio_compact(self):
         root=Path(__file__).resolve().parents[1]
         base=(root/"broadcaster/static/app.css").read_text()
@@ -163,7 +184,7 @@ class GroupExportFeatureTests(unittest.TestCase):
         self.assertIn('grid-template-columns: minmax(0, 1fr)',theme)
         self.assertIn('const groupSearch=document.getElementById("group-search")',js)
 
-    def test_export_only_accessible_nonbot_unique_safe_usernames(self):
+    def test_exports_name_username_and_only_telegram_visible_phone(self):
         token=self._begin()
         scan=self._wait(token)
         self.assertEqual(scan.state,"complete")
@@ -171,17 +192,32 @@ class GroupExportFeatureTests(unittest.TestCase):
         self.assertEqual(scan.missing_username,2)
         self.assertEqual(scan.skipped_bots,2)
         self.assertEqual(scan.usernames,["Alice_T","Bob_123"])
+        self.assertEqual(len(scan.members),4)
+        self.assertEqual(scan.phone_count,2)
         details=self.http.get(f"/groups/scans/{token}")
         self.assertEqual(details.status_code,200)
         self.assertIn("@Alice_T",details.text)
-        self.assertIn("Download 2 usernames",details.text)
+        self.assertIn("No Handle",details.text)
+        self.assertIn("+420777000111",details.text)
+        self.assertIn("Not visible",details.text)
+        self.assertIn("Download 4 members",details.text)
         csv_result=self.http.get(f"/groups/scans/{token}/export")
         self.assertEqual(csv_result.status_code,200)
         self.assertIn("attachment",csv_result.headers["content-disposition"])
+        self.assertIn("telegram-group-members.csv",csv_result.headers["content-disposition"])
         self.assertIn("text/csv",csv_result.headers["content-type"])
-        rows=csv_result.content.decode("utf-8-sig").strip().splitlines()
-        self.assertEqual(rows,["username","Alice_T","Bob_123"])
+        rows=list(csv.reader(io.StringIO(csv_result.content.decode("utf-8-sig"))))
+        self.assertEqual(rows[0],["Name","Username","Phone Number"])
+        self.assertEqual(len(rows),5)
+        by_name={row[0]:row[1:] for row in rows[1:]}
+        self.assertEqual(by_name["Alice Tester"],["Alice_T","+420777000111"])
+        self.assertEqual(by_name["Bob Smith"],["Bob_123","+12025550123"])
+        self.assertEqual(by_name["No Handle"],["",""])
+        self.assertEqual(
+            by_name['\'=HYPERLINK("https://example.invalid","click")'],["",""]
+        )
         self.assertNotIn("BotWriter",csv_result.text)
+        self.assertNotIn("420111111111",csv_result.text)
         with core.database() as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],0)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM campaigns").fetchone()[0],0)
@@ -202,10 +238,12 @@ class GroupExportFeatureTests(unittest.TestCase):
         self.assertEqual(scan.state,"partial")
         self.assertEqual(scan.seen,2)
         self.assertEqual(scan.usernames,["Alice_T"])
+        self.assertEqual(len(scan.members),2)
         r=self.http.get(f"/groups/scans/{token}/export")
         self.assertEqual(r.status_code,200)
         self.assertEqual(r.headers["x-group-scan-state"],"partial")
         self.assertIn("Alice_T",r.text)
+        self.assertIn("No Handle",r.text)
 
     def test_limit_is_reported_not_silently_complete(self):
         with patch.object(group_export,"MAX_SCAN_USERS",2):
