@@ -27,6 +27,20 @@ Telegram login codes and optional 2FA passwords are not stored. The application 
 
 Telegram can reject membership scans, hide phone numbers, rate-limit operations or restrict sending. The broadcaster does not bypass these controls. A group CSV contains only values exposed to the connected account. Exported phone numbers and contact names remain personal data even when they are visible.
 
+## Importing members from a Telegram group
+
+A member scan may include public names, usernames and numeric user IDs,
+plus phone numbers only when visible to the scanning account. An
+authenticated user can explicitly import the scanned member list into
+their own private contact group. Scans do not automatically import,
+send, join groups, or grant contact consent. IDs and names can still be
+personal data and must be handled accordingly.
+
+Importing does not prove a member is addressable from another Telegram
+account. Telegram session entity caches and per-account access hashes
+may differ. Users must not rely on this feature to bypass Telegram
+permissions or privacy restrictions. No phone lookup is performed.
+
 ## Sending and consent
 
 `SEND_ENABLED=false` is the safest default. Sending is a separate, user-confirmed action after reviewing recipients. Only eligible opted-in contacts can be selected. Contacts in multiple groups are deduplicated per campaign.

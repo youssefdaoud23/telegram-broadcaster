@@ -233,3 +233,36 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [ ] Publish source to GitHub and verify CI success.
 - [ ] Deploy to /opt/telegram-broadcaster only after validated backup,
       confirmation no campaigns are active and host Docker access.
+
+
+## Space Science professional visual simplification (2026-11-22)
+
+- [x] Remove orbit, planet, and satellite illustration from the hero.
+- [x] Remove ornamental circular theme-preview marks and temporary logos.
+- [x] Remove star-like backgrounds and Space-specific rotated/glowing brand.
+- [x] Keep the existing Telegram logo and the Classic default appearance.
+- [x] Retain the theme switcher, dark color palette, and typography-led
+      alternate dashboard.
+- [x] Add regression assertions that removed motifs are absent.
+- [ ] Publish and confirm automated CI smoke tests.
+- [ ] Apply to /opt production via normal pull/build when no send is active.
+
+
+## Group scan direct-to-contacts import and bulk assignment (2026-11-22)
+
+- [x] Retain API-provided Telegram user IDs even when username/phone are hidden.
+- [x] Include Telegram User ID in the member CSV and preview.
+- [x] Add explicit owner-scoped, CSRF-protected Import members directly
+      action after a group scan, with same-named private group by default.
+- [x] Reuse group/contacts by safe identifiers, preserve previous memberships,
+      respect archived/conflicting contacts, and never set consent true.
+- [x] Allow up to 5,000 scanned members to be imported directly, no sends.
+- [x] Allow selecting and bulk adding/removing contacts from one group on
+      Contacts page without changing other group memberships or consent.
+- [x] Add unit tests for ID-only users, duplicates, collisions, isolation,
+      reimport, consent, archived contacts and atomic bulk behavior.
+- [x] Clarify that access hashes are sender-account-specific, and delivery
+      to all selected people is never guaranteed by a successful scan.
+- [ ] Publish to GitHub and verify CI clean-build tests.
+- [ ] After verified backup and no in-progress broadcasts, deploy in /opt
+      and verify the actual interface and scanned group import manually.

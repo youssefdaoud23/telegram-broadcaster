@@ -4,7 +4,7 @@
   <div><a class="back-link" href="/groups">← Back to groups</a>
     <span class="eyebrow accent">READ-ONLY MEMBER EXPORT</span>
     <h1>{{ scan.group_title or "Scanning Telegram group" }}</h1>
-    <p class="subtle">This scan does not send messages or import people into your contacts.</p>
+    <p class="subtle">Inspect members, download a CSV, or add them directly to a private contact group. No messages are sent.</p>
   </div>
   <span class="status status-{{ 'connected' if scan.state=='complete' else ('pending' if scan.state in ('queued','running') else 'disconnected') }}">{{ scan.state|capitalize }}</span>
 </div>
@@ -28,7 +28,23 @@
   {% if scan.state in ('complete','partial','limited') and scan.members %}
   <div class="form-actions"><a class="btn btn-primary" href="/groups/scans/{{ scan.token }}/export">Download {{ scan.members|length }} members as CSV</a>
     <a class="btn btn-outline" href="/groups">Scan another group</a></div>
-  <p class="subtle">CSV columns: Name, Username, Phone Number. Unavailable usernames and phone numbers remain blank. Only details visible to this Telegram account are exported. Results expire after 30 minutes in server memory.</p>
+  <p class="subtle">CSV columns: Name, Username, Phone Number, Telegram User ID. Hidden phone numbers and missing usernames stay blank. Telegram IDs may help the original account identify a user, but delivery is not guaranteed. Results expire after 30 minutes.</p>
+  {% if scan.members|length <= direct_import_limit %}
+  <div class="scan-direct-import">
+    <h3>Import directly into a contact group</h3>
+    <p class="subtle">Create or reuse a contact group named after this Telegram group. Existing contacts are linked without losing their other group memberships. Imported members have no messaging consent by default.</p>
+    <form method="post" action="/groups/scans/{{ scan.token }}/import" class="scan-import-form"
+      data-confirm="Import these scanned members into your contacts? New contacts will not be opted in, and no messages will be sent.">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label for="scan-contact-group-name">Contact group name</label>
+      <input id="scan-contact-group-name" name="group_name" required maxlength="64" value="{{ suggested_group_name }}">
+      <button class="btn btn-primary" type="submit">Import {{ scan.members|length }} members directly</button>
+    </form>
+    <p class="subtle">Importing does not prove that a person agreed to private messages. For ID-only members, use the same Telegram account that scanned the group and expect some users to remain unreachable.</p>
+  </div>
+  {% else %}
+  <p class="subtle">Direct import is limited to {{ direct_import_limit }} members per scan. Download the CSV for larger groups.</p>
+  {% endif %}
   {% elif scan.state=='failed' %}<a class="btn btn-outline" href="/groups">Choose another group</a>{% endif %}
 </section>
 {% if sample %}
@@ -36,11 +52,12 @@
   <div class="panel-head"><h2>Member preview <span class="count-pill">{{ sample|length }} shown</span></h2></div>
   <div class="table-scroll">
     <table class="group-member-table">
-      <thead><tr><th>Name</th><th>Username</th><th>Phone Number</th></tr></thead>
+      <thead><tr><th>Name</th><th>Username</th><th>Phone Number</th><th>Telegram User ID</th></tr></thead>
       <tbody>
       {% for member in sample %}
       <tr><td>{{ member.name or '-' }}</td><td>{{ ('@' ~ member.username) if member.username else '-' }}</td>
-        <td>{{ member.phone if member.phone else 'Not visible' }}</td></tr>
+        <td>{{ member.phone if member.phone else 'Not visible' }}</td>
+        <td class="mono">{{ member.user_id or 'Unavailable' }}</td></tr>
       {% endfor %}
       </tbody>
     </table>

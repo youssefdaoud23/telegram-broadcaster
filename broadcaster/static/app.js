@@ -1,8 +1,10 @@
 "use strict";
 document.addEventListener("DOMContentLoaded",()=>{
-  for(const form of document.querySelectorAll("form[data-confirm]")){
+  for(const form of document.querySelectorAll("form")){
+    if(!form.hasAttribute("data-confirm") && !form.querySelector("[data-confirm]")) continue;
     form.addEventListener("submit",(event)=>{
-      if(!window.confirm(form.getAttribute("data-confirm"))) event.preventDefault();
+      const prompt=event.submitter?.getAttribute("data-confirm") || form.getAttribute("data-confirm");
+      if(prompt && !window.confirm(prompt)) event.preventDefault();
     });
   }
   const message=document.getElementById("compose-message");
@@ -61,6 +63,26 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   });
   refreshRecipients();
+  const bulkContactChecks=[...document.querySelectorAll(".bulk-contact-checkbox")];
+  const bulkContactSelectAll=document.getElementById("bulk-select-all");
+  const bulkContactCount=document.getElementById("bulk-contact-count");
+  const bulkContactForm=document.getElementById("bulk-contact-group-form");
+  if(bulkContactChecks.length && bulkContactForm){
+    const refreshBulkContacts=()=>{
+      const selected=bulkContactChecks.filter(c=>c.checked).length;
+      if(bulkContactCount)bulkContactCount.textContent=selected+" selected";
+      if(bulkContactSelectAll)bulkContactSelectAll.checked=selected===bulkContactChecks.length;
+      for(const button of bulkContactForm.querySelectorAll('button[type="submit"]')){
+        button.disabled=selected===0;
+      }
+    };
+    if(bulkContactSelectAll)bulkContactSelectAll.addEventListener("change",()=>{
+      for(const checkbox of bulkContactChecks)checkbox.checked=bulkContactSelectAll.checked;
+      refreshBulkContacts();
+    });
+    for(const checkbox of bulkContactChecks)checkbox.addEventListener("change",refreshBulkContacts);
+    refreshBulkContacts();
+  }
   const groupMemberChecks=[...document.querySelectorAll(".group-member-checkbox")];
   const groupMemberSearch=document.getElementById("group-member-search");
   const groupMemberCount=document.getElementById("group-member-count");

@@ -84,7 +84,8 @@ class AppearanceTests(unittest.TestCase):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn('data-site-template="space"', response.text)
-        self.assertIn("YOUR COMMUNICATIONS.", self.client.get("/").text)
+        self.assertIn("MESSAGING, SIMPLIFIED.", self.client.get("/").text)
+        self.assertNotIn("space-orbit-graphic", self.client.get("/").text)
         with core.database() as db:
             self.assertEqual(db.execute(
                 "SELECT site_template FROM admins WHERE username='owner'"
@@ -129,6 +130,15 @@ class AppearanceTests(unittest.TestCase):
         self.assertNotIn("http://", css)
         self.assertNotIn("https://", css)
         self.assertNotIn("@import", css)
+        dashboard=(root/"broadcaster/templates/dashboard.html").read_text()
+        appearance=(root/"broadcaster/templates/appearance.html").read_text()
+        for removed in ("space-orbit-graphic", "preview-orbit", "preview-logo",
+                        "space-star", ".satellite", ".planet"):
+            self.assertNotIn(removed, css+dashboard+appearance)
+        self.assertNotIn("transform:rotate(-6deg)", css)
+        self.assertIn("MESSAGING, SIMPLIFIED.", dashboard)
+        self.assertIn("Telegram Classic", appearance)
+        self.assertIn("Space Science", appearance)
 
     def test_legacy_admin_schema_migrates_and_preserves_preference(self):
         with core.database() as db:

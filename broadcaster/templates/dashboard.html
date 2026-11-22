@@ -1,18 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="space-mission-hero" aria-label="Space Science mission dashboard">
+<section class="space-mission-hero" aria-label="Space Science dashboard introduction">
   <div class="space-hero-copy">
-    <span class="space-hero-eyebrow">TELEGRAM BROADCASTER / MISSION CONTROL</span>
-    <h2>YOUR COMMUNICATIONS.<br>IN ORBIT.</h2>
-    <p>Keep every account, audience and message in view. Prepare your next transmission with confidence.</p>
+    <span class="space-hero-eyebrow">TELEGRAM BROADCASTER / OVERVIEW</span>
+    <h2>MESSAGING, SIMPLIFIED.</h2>
+    <p>Manage your audiences, connected accounts and broadcasts from one clear workspace.</p>
     <a href="/compose" class="space-hero-link">Create a broadcast</a>
   </div>
-  <div class="space-orbit-graphic" aria-hidden="true">
-    <div class="orbit one"></div><div class="orbit two"></div>
-    <div class="planet"></div><div class="satellite"></div>
-  </div>
 </section>
-<div class="space-mission-section-label" aria-hidden="true">LIVE WORKSPACE / OVERVIEW</div>
+<div class="space-mission-section-label" aria-hidden="true">WORKSPACE / OVERVIEW</div>
 <div class="page-heading"><div><span class="eyebrow accent">DASHBOARD</span><h1>Welcome back</h1><p class="subtle">One place for accounts, contacts, and personal Telegram broadcasts.</p></div><a class="btn btn-primary" href="/compose"><span>＋</span> New broadcast</a></div>
 <div class="stats-grid">
   <a href="/contacts" class="stat-card"><span class="stat-icon blue">♧</span><span class="stat-number">{{ stats.contacts }}</span><span class="stat-label">Total contacts</span><small>In your local database</small></a>

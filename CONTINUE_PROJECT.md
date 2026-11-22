@@ -20,10 +20,12 @@ Before making any changes:
     Telegram groups exposed to the user's connected account and exports
     Name, Username and Phone Number only when those fields are visible
     in Telethon User objects. Hidden phone numbers must remain blank.
-    Never infer or look up phone numbers, import contacts, change opt-in,
-    send messages, join groups or scan private chats. Preserve limits,
-    cross-workspace protection and partial-result warnings. Do not scan
-    real group data without an explicit user-selected group.
+    Never infer or look up phone numbers, automatically import contacts,
+    change opt-in, send messages, join groups or scan private chats.
+    Explicit user-confirmed import of an existing owner-scoped scan into a
+    private contact group is allowed and starts new contacts as consent=0.
+    Preserve limits, cross-workspace protection and partial-result warnings.
+    Do not scan real group data without an explicit user-selected group.
 
 
 14. The contact database remains SQLite under /opt/telegram-broadcaster/data.
@@ -66,3 +68,21 @@ Before making any changes:
 21. UI work is developed independently from production. Before any live
     /opt upgrade, verify no active sends and make a consistent backup.
     Keep the other Docker services, SQLite data, and Telegram sessions intact.
+
+
+22. The user dislikes esoteric-looking symbols/logos in the optional
+    Space Science theme. Do not restore planet/orbit/satellite motifs,
+    star-dotted page backgrounds, ornamental preview icons, or glowing/
+    rotated Space brand logos. Preserve a clean text-first banner,
+    the familiar Telegram paper-plane brand and original Classic design.
+
+
+23. Direct import from a scanned Telegram group uses
+    POST /groups/scans/{token}/import. This creates/reuses a private
+    contact group with the same name, reuses matching existing contacts
+    safely, never resurrects archived records or changes consent, and
+    performs no sends. Telegram User IDs are retained in scan exports and
+    may resolve only through the original sender's entity cache/access
+    hash; never claim all users are messageable. The Contacts page also
+    has an additive/removal bulk group membership action. Preserve
+    cross-workspace/CSRF validation and the 5,000-member import bound.

@@ -1,8 +1,8 @@
-"""On-demand, read-only Telegram group member exports.
+"""On-demand, read-only Telegram group scans and member exports.
 
-No group data is stored in SQLite or added to broadcasting contacts. Scan
-results remain only in process memory for a short period, scoped to the
-authenticated workspace. No messages or invitations are sent.
+Scanning alone never imports contacts: results stay briefly in owner-scoped
+memory. A separate CSRF-protected, user-confirmed import action can store
+the scanned members as private contacts without changing opt-in or sending.
 """
 from __future__ import annotations
 
@@ -29,6 +29,14 @@ class ExportMember:
     name: str
     username: str
     phone: str
+    user_id: str = ""
+
+
+def suggested_group_name(title: str) -> str:
+    """Keep the Telegram group title when compatible with contact-group names."""
+    value = " ".join((title or "").split())
+    value = re.sub(r"[;|\\\x00]", "-", value).strip()[:64].strip()
+    return value or "Telegram group"
 
 
 def member_name(member) -> str:
@@ -232,10 +240,15 @@ async def _collect(scan: GroupScan) -> None:
                     scan.missing_username += 1
                 display_name = member_name(member)
                 phone = visible_phone(member)
-                if not (display_name or username or phone):
-                    continue
                 user_id = getattr(member, "id", None)
-                if isinstance(user_id, int) and user_id > 0:
+                numeric_id = (
+                    str(user_id)
+                    if isinstance(user_id, int) and not isinstance(user_id, bool)
+                    and 0 < user_id < 10**20 else ""
+                )
+                if not (display_name or username or phone or numeric_id):
+                    continue
+                if numeric_id:
                     key: tuple[str, int | str] = ("id", user_id)
                 elif username:
                     key = ("username", username.casefold())
@@ -246,7 +259,7 @@ async def _collect(scan: GroupScan) -> None:
                 if key in seen_members:
                     continue
                 seen_members.add(key)
-                scan.members.append(ExportMember(display_name, username, phone))
+                scan.members.append(ExportMember(display_name, username, phone, numeric_id))
                 if phone:
                     scan.phone_count += 1
                 if username and username.casefold() not in seen_usernames:

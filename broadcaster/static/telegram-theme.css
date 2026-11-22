@@ -575,3 +575,41 @@ label { color: var(--tg-text); }
   .contact-group-actions { width:100%; }
   .group-member-row { gap:8px; }
 }
+
+
+/* Bulk contacts assignment and zero-download Telegram scan import. */
+.contacts-bulk-form {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px;
+  margin:12px 0;
+  padding:12px;
+  border:1px solid var(--tg-outline);
+  border-radius:12px;
+  background:var(--tg-surface-alt);
+}
+.contacts-bulk-form label,.contact-bulk-count {
+  font-size:12px;
+  font-weight:650;
+}
+.contacts-bulk-form select {flex:1;min-width:175px;max-width:310px;}
+.contacts-bulk-form button:disabled {opacity:.45;cursor:not-allowed;}
+.contacts-table .bulk-contact-checkbox,
+.contacts-table #bulk-select-all {width:16px;height:16px;min-width:16px;accent-color:var(--blue);}
+.contacts-table th:first-child,.contacts-table td:first-child {width:42px;text-align:center;}
+.scan-direct-import {
+  margin:17px 0 0;
+  padding:16px;
+  border:1px solid var(--tg-outline);
+  border-radius:12px;
+  background:var(--tg-surface-alt);
+}
+.scan-direct-import h3 {font-size:15px;margin:0 0 8px;}
+.scan-import-form {display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:15px 0;}
+.scan-import-form label {font-size:12px;font-weight:650;}
+.scan-import-form input[name="group_name"] {min-width:200px;flex:1;}
+@media(max-width:690px) {
+  .scan-import-form,.contacts-bulk-form {align-items:stretch;flex-direction:column;}
+  .scan-import-form input[name="group_name"],.contacts-bulk-form select {max-width:none;}
+}

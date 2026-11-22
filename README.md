@@ -50,18 +50,60 @@ Use that option instead of the default helper command. The helper preserves exis
 - **Contact database:** Built-in SQLite with CSV import/export and opt-in status. A contact can belong to several private audience groups. Overlapping groups never produce duplicate deliveries in one campaign.
 - **Telegram account management:** Encrypted API credentials, separate Telegram sessions, status verification, and reauthentication after session revocation.
 - **Broadcast controls:** Compose, preview, confirm, and send individually to opted-in contacts. Reuse a previous broadcast as a new editable draft, edit unsent drafts, and perform cautious pending-only retries.
-- **Telegram group export:** Scan an accessible Telegram group and export the member names, public usernames, and phone numbers Telegram actually exposes. Hidden numbers remain blank. Exporting never creates contacts or grants consent.
+- **Telegram group export and direct import:** Scan a group you can access, view member names, usernames, visible phone numbers and Telegram user IDs, or explicitly import the scanned members straight into a same-named private contact group. Hidden phone numbers remain blank; importing never grants messaging consent.
 - **Operational safeguards:** One application worker, sender authorization checks, flood-wait handling, no automatic resends after interruptions, and a health endpoint at `/health`.
 
 A **contact group** is an application-defined list for individual messages. It is different from a **Telegram group**, whose members may be available through the read-only group export page.
+
+## Import scanned Telegram group members directly into Contacts
+
+Open **Group export**, choose your connected Telegram account, and scan a
+group. The results page offers **Import members directly** as well as
+Download CSV. The import button proposes the Telegram group's original name
+for a private application contact group. You may edit the name; an existing
+group with that name is reused. There is no download/re-upload step.
+
+Each new contact stores available name, username, phone and Telegram user ID
+(up to 5,000 members per direct import). Contacts already in the database
+are linked to the group without duplicating them or deleting their previous
+group memberships. Conflicting identifiers and previously archived contacts
+are skipped rather than silently merged or reactivated. Group scans with
+partial results remain explicitly labeled incomplete.
+
+**No scanned member is automatically opted in**: newly imported contacts
+start with consent disabled. Existing contacts keep their recorded consent
+and enabled status. A shared Telegram group is not consent to receive
+private promotional messages. The app never sends or drafts messages as
+part of importing.
+
+**Missing username or phone does not always mean an unusable member.**
+A Telegram numeric user ID can identify them if the same sending account's
+Telethon session has encountered the member and retained their entity
+access hash. Use the connected account that scanned the group when sending
+to ID-only recipients. Telegram can still deny access or restrict messages,
+and no software can guarantee delivery to all scanned members. An ID alone
+is not a phone number and cannot be used to reveal private phone numbers.
+
+To reorganize existing contacts without individually editing each one,
+open **Contacts**, tick the people you need, select a group and use
+**Add selected** or **Remove selected**. This affects only that group's
+membership, not contacts' other groups or consent. The group editor also
+supports selecting all shown contacts. A broadcast selects only opted-in,
+enabled recipients and requires the usual explicit preview and Send action.
+
+Exported group CSV files now have a fourth column, **Telegram User ID**.
+The standard Contacts CSV importer understands this header and
+**Phone Number**. Direct import is preferred when working with groups
+already scanned in this app.
 
 ## Website templates and appearance
 
 The interface includes two selectable designs. **Telegram Classic** is the
 original design and remains the default for new and existing users.
-**Space Science** is an original, space-inspired mission-control theme with
-cosmic gradients, darker navigation, status highlights, and a featured
-dashboard banner. The visual inspiration is the
+**Space Science** is an original, professional dark theme with
+subtle gradients, restrained navigation, status highlights, and a clean
+text-focused dashboard banner. Decorative planets, orbit marks and
+symbolic motifs have been intentionally excluded. The visual inspiration is the
 [Space Science template](https://freewebsitetemplates.com/preview/space-science/index.html);
 no stock artwork, downloaded images, external stylesheets, or code from that
 site are included in this repository.

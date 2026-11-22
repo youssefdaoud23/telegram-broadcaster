@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import core, telegram, group_export
+from . import core, telegram, group_export, group_import
 
 ROOT = Path(__file__).parent
 app = FastAPI(title="Telegram Broadcaster", docs_url=None, redoc_url=None, openapi_url=None)
@@ -341,6 +341,30 @@ def add_contact(
     return redirect("/contacts", "Contact added to your private database.")
 
 
+@app.post("/contacts/bulk-group")
+async def bulk_contact_group_action(request: Request):
+    person = principal(request)
+    form = await request.form(max_fields=6000)
+    authorize(request, str(form.get("csrf", "")))
+    try:
+        group_id = int(str(form.get("group_id", "")))
+        selected = [int(str(item)) for item in form.getlist("contacts")]
+        action = str(form.get("action", ""))
+        if action not in ("add", "remove"):
+            raise ValueError("Choose an allowed group action")
+        with core.database() as db:
+            updated = core.bulk_update_group_members(
+                db, person["admin_id"], group_id, selected,
+                remove=(action == "remove"),
+            )
+            db.commit()
+    except (ValueError, TypeError) as exc:
+        return redirect("/contacts", str(exc))
+    verb = "Removed from" if action == "remove" else "Added to"
+    return redirect("/contacts", f"{verb} group: {updated} membership(s) changed. "
+                    "Existing consent and other group assignments are preserved.")
+
+
 @app.get("/contacts/groups")
 def contact_group_page(request: Request):
     user=principal(request)
@@ -503,8 +527,8 @@ async def import_contacts(request: Request, csrf: str = Form(""), file: UploadFi
                     break
                 raw_identifier = (row.get("ID") or "").strip()
                 username = row.get("Username") or row.get("username") or (raw_identifier if raw_identifier.startswith("@") else "")
-                phone = row.get("Phone") or row.get("phone") or (raw_identifier if raw_identifier.startswith("+") else "")
-                numeric = row.get("User ID") or (raw_identifier if raw_identifier.isdigit() else "")
+                phone = row.get("Phone") or row.get("Phone Number") or row.get("phone") or (raw_identifier if raw_identifier.startswith("+") else "")
+                numeric = row.get("User ID") or row.get("Telegram User ID") or (raw_identifier if raw_identifier.isdigit() else "")
                 db.execute("SAVEPOINT import_contact")
                 try:
                     contact = core.normalize_contact(
@@ -553,9 +577,10 @@ def export_contacts(request: Request):
             (labels[gid] for gid in membership.get(r["id"],set()) if gid in labels),
             key=str.casefold,
         ))
-        writer.writerow([r["name"],r["username"],r["phone"],r["user_id"],r["notes"],
+        writer.writerow([_csv_safe_name(r["name"]),r["username"],r["phone"],r["user_id"],
+                         _csv_safe_name(r["notes"]),
                          "yes" if r["consent"] else "no","yes" if r["enabled"] else "no",
-                         group_names])
+                         _csv_safe_name(group_names)])
     return StreamingResponse(
         iter([target.getvalue()]),media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=telegram-contacts.csv","Cache-Control":"no-store"},
@@ -609,6 +634,8 @@ def group_scan_page(request: Request, scan_token: str):
     return render(
         request, "group_scan.html", title="Group scan results",
         scan=scan, sample=scan.members[:40],
+        suggested_group_name=group_export.suggested_group_name(scan.group_title),
+        direct_import_limit=group_import.DIRECT_IMPORT_LIMIT,
     )
 
 
@@ -627,16 +654,43 @@ def group_scan_csv(request: Request, scan_token: str):
         raise HTTPException(409, "No group member details are ready for export")
     output = io.StringIO(newline="")
     writer = csv.writer(output)
-    writer.writerow(["Name", "Username", "Phone Number"])
+    writer.writerow(["Name", "Username", "Phone Number", "Telegram User ID"])
     for member in sorted(scan.members, key=lambda m: (m.name.casefold(), m.username.casefold())):
-        # Only Telegram-visible data. Missing usernames/phone numbers stay blank.
-        # Names can contain arbitrary text, so neutralize spreadsheet formulas.
-        writer.writerow([_csv_safe_name(member.name), member.username, member.phone])
+        # Missing usernames/phones stay blank. An ID may resolve only through
+        # the Telegram session that originally saw that group member.
+        # Neutralize formula-like names when opened in spreadsheet apps.
+        writer.writerow([_csv_safe_name(member.name), member.username,
+                         member.phone, member.user_id])
     return StreamingResponse(
         iter([output.getvalue().encode("utf-8-sig")]),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="telegram-group-members.csv"',
-                 "X-Group-Scan-State": scan.state},
+                 "X-Group-Scan-State": scan.state,
+                 "Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
+
+
+@app.post("/groups/scans/{scan_token}/import")
+def import_group_scan_action(request: Request, scan_token: str,
+                             csrf: str = Form(""), group_name: str = Form("")):
+    person = authorize(request, csrf)
+    scan = group_export.get_scan(scan_token, person["admin_id"])
+    if scan is None:
+        raise HTTPException(404, "Group scan not found or expired")
+    try:
+        with core.database() as db:
+            summary = group_import.import_scan_members(
+                db, scan, person["admin_id"], group_name,
+            )
+            db.commit()
+    except ValueError as exc:
+        return redirect(f"/groups/scans/{scan_token}", str(exc))
+    return redirect(
+        f"/contacts/groups/{summary.group_id}",
+        f"Group {'created' if summary.created_group else 'reused'}: "
+        f"{summary.created} contacts added, {summary.linked_existing} existing contacts linked, "
+        f"{summary.already_in_group} already in group, {summary.skipped} skipped. "
+        "New contacts are not opted in. No messages were sent.",
     )
 
 

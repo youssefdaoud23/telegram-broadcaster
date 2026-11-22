@@ -421,8 +421,8 @@ def normalize_contact(name: str, username: str, phone: str, user_id: str, notes:
     username = username.lower()
     if phone and not re.fullmatch(r"\+[1-9][0-9]{6,14}", phone):
         raise ValueError("Use a full international phone number, e.g. +420123456789")
-    if user_id and not re.fullmatch(r"[1-9][0-9]{5,19}", user_id):
-        raise ValueError("Telegram numeric user ID must be 6–20 digits")
+    if user_id and not re.fullmatch(r"[1-9][0-9]{2,19}", user_id):
+        raise ValueError("Telegram numeric user ID must be 3-20 digits")
     if not (username or phone or user_id):
         raise ValueError("Provide at least a Telegram username, phone number, or user ID")
     if len(notes) > 1000:
@@ -540,6 +540,47 @@ def set_contact_groups(db: sqlite3.Connection, owner_id: int,
             "INSERT INTO contact_group_members(group_id,contact_id,added_at) VALUES (?,?,?)",
             (group_id,contact_id,now()),
         )
+
+
+def bulk_update_group_members(db: sqlite3.Connection, owner_id: int,
+                              group_id: int, contact_ids: list[int],
+                              *, remove: bool = False) -> int:
+    """Add/remove selected contacts while preserving all other memberships."""
+    if not 1 <= len(contact_ids) <= 5000:
+        raise ValueError("Choose between 1 and 5,000 contacts")
+    if len(contact_ids) != len(set(contact_ids)):
+        raise ValueError("Selected contacts must be unique")
+    if any(not isinstance(cid, int) or cid <= 0 for cid in contact_ids):
+        raise ValueError("Invalid contact selection")
+    if not db.execute(
+        "SELECT 1 FROM contact_groups WHERE id=? AND owner_id=?",
+        (group_id, owner_id),
+    ).fetchone():
+        raise ValueError("Selected group not found in your workspace")
+    pending = set(contact_ids)
+    for start in range(0, len(contact_ids), 450):
+        chunk = contact_ids[start:start+450]
+        placeholders = ",".join("?" for _ in chunk)
+        matches = db.execute(
+            f"SELECT id FROM contacts WHERE owner_id=? AND archived=0 "
+            f"AND id IN ({placeholders})", (owner_id, *chunk),
+        ).fetchall()
+        pending.difference_update(row["id"] for row in matches)
+    if pending:
+        raise ValueError("Some selected contacts are unavailable in your workspace")
+    before = db.total_changes
+    if remove:
+        db.executemany(
+            "DELETE FROM contact_group_members WHERE group_id=? AND contact_id=?",
+            [(group_id, cid) for cid in contact_ids],
+        )
+    else:
+        db.executemany(
+            "INSERT OR IGNORE INTO contact_group_members(group_id,contact_id,added_at) "
+            "VALUES (?,?,?)",
+            [(group_id, cid, now()) for cid in contact_ids],
+        )
+    return db.total_changes - before
 
 
 def set_group_members(db: sqlite3.Connection, owner_id: int,

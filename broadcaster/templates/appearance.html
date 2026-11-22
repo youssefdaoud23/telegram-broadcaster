@@ -14,7 +14,7 @@
     <input type="hidden" name="site_template" value="telegram">
     <input type="hidden" name="return_to" value="/settings/appearance">
     <div class="appearance-preview classic-preview" aria-hidden="true">
-      <div class="preview-sidebar"><span class="preview-logo"></span><i></i><i></i><i></i><i></i></div>
+      <div class="preview-sidebar"><i></i><i></i><i></i><i></i></div>
       <div class="preview-main"><div class="preview-bar"></div><div class="preview-title"></div><div class="preview-metrics"><span></span><span></span><span></span></div><div class="preview-panel"></div></div>
     </div>
     <div class="appearance-info">
@@ -30,12 +30,11 @@
     <input type="hidden" name="site_template" value="space">
     <input type="hidden" name="return_to" value="/settings/appearance">
     <div class="appearance-preview space-preview" aria-hidden="true">
-      <div class="preview-sidebar"><span class="preview-logo"></span><i></i><i></i><i></i><i></i></div>
+      <div class="preview-sidebar"><i></i><i></i><i></i><i></i></div>
       <div class="preview-main"><div class="preview-bar"></div><div class="preview-title"></div><div class="preview-metrics"><span></span><span></span><span></span></div><div class="preview-panel"></div></div>
-      <div class="preview-orbit"></div>
     </div>
     <div class="appearance-info">
-      <div><span class="eyebrow">ALTERNATE DESIGN</span><h2>Space Science</h2><p>Immersive mission control. Nebula gradients, luminous indicators, and futuristic surfaces.</p></div>
+      <div><span class="eyebrow">ALTERNATE DESIGN</span><h2>Space Science</h2><p>A refined dark interface with subtle gradients and clear, professional navigation.</p></div>
       <span class="appearance-status">{% if site_template=='space' %}Selected{% else %}Available{% endif %}</span>
     </div>
     <button type="submit" class="btn {% if site_template=='space' %}btn-secondary{% else %}btn-primary{% endif %}" {% if site_template=='space' %}disabled{% endif %}>

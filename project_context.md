@@ -146,8 +146,8 @@ messages or group joins. Member export contains Name, Username, Phone Number
 for fields visible in each Telethon User object. Phone numbers are blank
 when Telegram does not return them; no phone lookup/inference. Members
 without usernames are included if another field is visible. Telegram
-IDs are used only internally for deduplication, not exported. No private
-messages or automatic contact import/consent. Site users cannot read
+IDs are retained and can be exported or explicitly imported into
+contacts without consent. No private messages or automatic import/consent. Site users cannot read
 others' scan tokens or use their Telegram accounts. Background results live only
 in process memory for 30 minutes; app restarts discard them.
 MAX_SCAN_USERS is 25,000, scan timeout is 240 seconds, one active
@@ -177,7 +177,7 @@ behavior or user data is changed. Includes regression tests.
 
 ## Member export fields and visibility (2026-11-22)
 
-broadcaster/group_export.py: ExportMember(name, username, phone), kept only
+broadcaster/group_export.py: ExportMember(name, username, phone, user_id), kept only
 in owner-scoped in-memory GroupScan.members for 30 minutes. Each entity
 already returned by iter_participants supplies first_name, last_name,
 username and phone, when Telegram permits access. No extra lookups are made.
@@ -290,3 +290,54 @@ remains intact; Space has its own key and defaults to the night palette.
 All theme assets are local and allowed by the existing CSP. No Telegram
 API calls, changes to sends, contacts, sessions, or campaign histories.
 Production /opt is NOT changed by editing the staging checkout.
+
+
+## Space Science ornament removal (2026-11-22)
+
+User found the added decorative visuals too esoteric and requested removing
+the logos, while retaining the option to switch website templates.
+The updated optional Space Science style retains its professional dark color
+palette but removes the decorative planet, satellite, orbit rings,
+star-like page background dots, preview logo placeholders, and the custom
+rotated/glowing brand mark. The existing Telegram paper-plane brand
+symbol from the original UI is preserved unmodified. The overview hero is
+text-led, using "MESSAGING, SIMPLIFIED." and a restrained linear gradient.
+Telegram Classic, group selection, contact data, account sessions,
+campaign logic, and theme switch state are unchanged. No database schema
+change. Regression tests explicitly check removed motifs.
+
+
+## Explicit Telegram scan import, bulk contact assignment, and visible IDs (2026-11-22)
+
+Group scans retain each member's numeric Telegram user ID (where supplied
+by the Telegram API) alongside name/username/phone in memory. The group
+CSV now includes a fourth column, Telegram User ID. A missing username
+and hidden phone do not imply Telegram can never address the user: ID
+resolution also needs that account's entity access hash/session cache.
+The original scanning account should be used for legitimate opted-in
+messages to ID-only contacts. Other senders may fail, and Telegram can
+still reject messages. Do not infer phone numbers or claim 100% delivery.
+
+On /groups/scans/{token}, an explicit CSRF-protected form posts to
+/groups/scans/{token}/import with an editable suggested contact-group name.
+broadcaster/group_import.py validates owner, completed/partial scan state,
+group name and max 5000 scanned members, then creates/reuses same-named
+private contact group and imports members with available identifiers.
+Existing contacts are matched safely across Telegram ID/username/phone;
+conflicting or archived records are skipped; existing group memberships,
+consent and manually edited details are preserved. Missing numeric IDs
+can be filled on safely recognized existing contacts. Each member import
+uses an SQLite savepoint; no Telegram API requests or messages. Newly
+created contacts have consent=False and enabled=True. No opt-in is inferred
+from Telegram group membership. IDs are account-specific in practical
+resolvability, since access hashes differ between Telegram accounts.
+
+Contacts page has a new select-all/bulk checkbox column and an action
+form POST /contacts/bulk-group to add/remove selected members to/from
+one owner-scoped private group. core.bulk_update_group_members validates
+up to 5000 IDs and owner before any writes, preserves all other group
+links and contact consent. Group editor's existing bulk membership
+replacement remains separate. CSV Contacts import also supports scan
+headers Phone Number and Telegram User ID; exported string fields have
+spreadsheet formula safety treatment. No new DB tables or external apps.
+Production /opt not modified by developing this staging checkout.

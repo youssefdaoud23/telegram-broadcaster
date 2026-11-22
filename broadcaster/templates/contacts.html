@@ -8,9 +8,26 @@
       <select name="group_id" aria-label="Filter contacts by group">
         <option value="0">All contact groups</option>{% for group in groups %}<option value="{{ group['id'] }}" {% if group_id==group['id'] %}selected{% endif %}>{{ group['name'] }} ({{ group['total'] }})</option>{% endfor %}
       </select><button class="btn btn-secondary">Filter</button></form>
-    <div class="table-scroll"><table class="contacts-table"><thead><tr><th>Contact</th><th>Telegram identifier</th><th>Groups</th><th>Eligibility</th><th></th></tr></thead><tbody>
+    {% if groups and contacts %}
+    <form id="bulk-contact-group-form" method="post" action="/contacts/bulk-group" class="contacts-bulk-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <span class="contact-bulk-count" id="bulk-contact-count">0 selected</span>
+      <label for="bulk-target-group">Contact group</label>
+      <select id="bulk-target-group" name="group_id" required>
+        <option value="">Choose a group</option>
+        {% for group in groups %}<option value="{{ group['id'] }}">{{ group['name'] }}</option>{% endfor %}
+      </select>
+      <button type="submit" class="btn btn-primary" name="action" value="add">Add selected</button>
+      <button type="submit" class="btn btn-secondary" name="action" value="remove"
+        data-confirm="Remove selected contacts from this group? Other group assignments remain unchanged.">Remove selected</button>
+    </form>
+    {% endif %}
+    <div class="table-scroll"><table class="contacts-table"><thead><tr>
+    <th>{% if groups %}<input type="checkbox" id="bulk-select-all" aria-label="Select all visible contacts">{% endif %}</th>
+    <th>Contact</th><th>Telegram identifier</th><th>Groups</th><th>Eligibility</th><th></th></tr></thead><tbody>
     {% for c in contacts %}
-    <tr><td><div class="person-cell"><span class="contact-avatar">{{ c['name'][:1]|upper }}</span><div><a class="table-primary" href="/contacts/{{ c['id'] }}/edit">{{ c['name'] }}</a><div class="table-secondary">{{ c['notes'][:60] or '-' }}</div></div></div></td>
+    <tr><td>{% if groups %}<input type="checkbox" name="contacts" value="{{ c['id'] }}" form="bulk-contact-group-form" class="bulk-contact-checkbox" aria-label="Select {{ c['name'] }}">{% endif %}</td>
+    <td><div class="person-cell"><span class="contact-avatar">{{ c['name'][:1]|upper }}</span><div><a class="table-primary" href="/contacts/{{ c['id'] }}/edit">{{ c['name'] }}</a><div class="table-secondary">{{ c['notes'][:60] or '-' }}</div></div></div></td>
     <td><span class="mono">{{ c['username'] or c['phone'] or c['user_id'] }}</span></td>
     <td><div class="contact-group-tags">{% for g in groups %}{% if g['id'] in membership.get(c['id'], []) %}
       <a class="contact-group-tag" href="/contacts?group_id={{ g['id'] }}">{{ g['name'] }}</a>{% endif %}{% endfor %}
@@ -18,7 +35,7 @@
     <td>{% if not c['enabled'] %}<span class="status status-muted">Disabled</span>{% elif c['consent'] %}<span class="status status-connected">Opted in</span>{% else %}<span class="status status-pending">No consent</span>{% endif %}</td>
     <td class="actions-cell"><a class="icon-button" title="Edit" href="/contacts/{{ c['id'] }}/edit">Edit</a>
     <form method="post" action="/contacts/{{ c['id'] }}/remove" class="inline-form" data-confirm="Remove this contact from active recipients?"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="icon-button danger-text">Remove</button></form></td></tr>
-    {% else %}<tr><td colspan="5"><div class="empty-state"><span class="empty-icon">♧</span><h3>No contacts found</h3><p>Add one using the form, or import your existing list.</p></div></td></tr>{% endfor %}
+    {% else %}<tr><td colspan="6"><div class="empty-state"><span class="empty-icon">♧</span><h3>No contacts found</h3><p>Add one using the form, or import your existing list.</p></div></td></tr>{% endfor %}
     </tbody></table></div>
   </section>
   <div class="side-stack">

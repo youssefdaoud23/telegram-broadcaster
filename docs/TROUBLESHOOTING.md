@@ -51,6 +51,30 @@ Use **Telegram accounts > Check all sessions**. Telegram may revoke old sessions
 
 Telegram may hide members or phone numbers and can rate-limit enumeration. The export reports partial/limited scans. A "Complete" result only means that the accessible API iteration ended. Do not attempt to bypass account or group permissions.
 
+## A group member has neither a username nor a phone number
+
+This is normal: Telegram lets users hide phone numbers and omit public
+usernames. Scanned Telegram numeric user IDs are retained and can be
+imported into Contacts. However, Telegram also requires an access hash
+known to the specific connected account. The account that scanned the
+group is the best choice when preparing a legitimate, opted-in message
+to an ID-only contact; using a different account may fail entity resolution.
+Telegram can restrict private messages regardless of identifier.
+
+Directly imported group members are **not opted in** automatically.
+Review and record each person's consent before considering a broadcast.
+A successful group scan, a visible ID or a valid username never guarantees
+that a private message can be delivered.
+
+## Import a group without downloading and uploading CSV
+
+On a completed group scan, choose **Import members directly**. The
+proposed contact group name matches the Telegram group when allowed by
+the app's 64-character naming rules. Existing groups are reused and
+matching contacts linked without duplicates. Imports are limited to 5,000
+members per scan. Group membership changes do not affect consent.
+Contacts also supports bulk Add/Remove selected from a group.
+
 ## Broadcast is interrupted / unknown
 
 Never automatically retry a delivery whose status is unknown. An interrupted campaign can have sent some messages before shutdown. Inspect campaign history and Telegram conversations. "Try again" is restricted to pending recipients; "Reuse and edit" creates a new deliberate draft. See [Security](SECURITY.md).

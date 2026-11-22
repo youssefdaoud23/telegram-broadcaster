@@ -206,15 +206,16 @@ class GroupExportFeatureTests(unittest.TestCase):
         self.assertIn("attachment",csv_result.headers["content-disposition"])
         self.assertIn("telegram-group-members.csv",csv_result.headers["content-disposition"])
         self.assertIn("text/csv",csv_result.headers["content-type"])
+        self.assertEqual(csv_result.headers["cache-control"],"no-store")
         rows=list(csv.reader(io.StringIO(csv_result.content.decode("utf-8-sig"))))
-        self.assertEqual(rows[0],["Name","Username","Phone Number"])
+        self.assertEqual(rows[0],["Name","Username","Phone Number","Telegram User ID"])
         self.assertEqual(len(rows),5)
         by_name={row[0]:row[1:] for row in rows[1:]}
-        self.assertEqual(by_name["Alice Tester"],["Alice_T","+420777000111"])
-        self.assertEqual(by_name["Bob Smith"],["Bob_123","+12025550123"])
-        self.assertEqual(by_name["No Handle"],["",""])
+        self.assertEqual(by_name["Alice Tester"],["Alice_T","+420777000111","101"])
+        self.assertEqual(by_name["Bob Smith"],["Bob_123","+12025550123","104"])
+        self.assertEqual(by_name["No Handle"],["","","102"])
         self.assertEqual(
-            by_name['\'=HYPERLINK("https://example.invalid","click")'],["",""]
+            by_name['\'=HYPERLINK("https://example.invalid","click")'],["","","103"]
         )
         self.assertNotIn("BotWriter",csv_result.text)
         self.assertNotIn("420111111111",csv_result.text)
