@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block public_content %}
+<div class="login-grid">
+  <section class="login-hero">
+    <span class="brand brand-light"><span class="brand-symbol">➤</span><span><strong>Telegram</strong><small>BROADCASTER</small></span></span>
+    <div class="hero-text"><span class="eyebrow">YOUR PRIVATE MESSAGING HUB</span><h1>Connect personally.<br><em>Communicate clearly.</em></h1><p>Manage Telegram accounts, organize contacts, and send individual messages from one secure workspace.</p></div>
+    <div class="hero-steps"><div><b>01</b> Connect your Telegram account</div><div><b>02</b> Organize your audience</div><div><b>03</b> Compose and track deliveries</div></div>
+    <div class="hero-foot">Self-hosted · Your contacts stay yours</div>
+  </section>
+  <section class="login-side">
+    <div class="auth-card">
+      <span class="tiny-label">SECURE ACCESS</span>
+      <h2>Welcome back</h2><p class="subtle">Sign in to your Telegram Broadcaster workspace.</p>
+      {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+      {% if setup %}<div class="alert alert-warning">Administrator setup is required. Use the server CLI to create your administrator account first.</div>{% endif %}
+      <form action="/login" method="post" class="stack-form">
+        <label for="username">Username</label><input id="username" name="username" autocomplete="username" required placeholder="Admin username">
+        <label for="password">Password</label><input id="password" type="password" name="password" autocomplete="current-password" required placeholder="Your password">
+        <button class="btn btn-primary btn-block" type="submit">Sign in <span>→</span></button>
+      </form>
+      <p class="login-hint">Telegram verification codes and API hashes should only be entered in this private installation. Never share them in chat or GitHub.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}

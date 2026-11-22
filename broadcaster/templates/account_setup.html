@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading"><div><a class="back-link" href="/accounts">← Back to accounts</a><h1>Verify {{ account['label'] }}</h1><p class="subtle">Complete authentication directly through Telegram.</p></div><span class="status status-{{ account['state'] }}">{{ account['state']|replace('_',' ') }}</span></div>
+<div class="onboard-grid">
+  <section class="panel">
+    <h2>Telegram account</h2><p class="subtle">Verification is tied to this account's private session.</p>
+    <div class="identity-card"><span class="round-avatar large">{{ account['label'][:1]|upper }}</span><div><strong>{{ account['label'] }}</strong><small>{{ account['username'] or account['expected_username'] or 'Pending verification' }}</small></div></div>
+    {% if account['state']=='connected' %}
+    <div class="alert alert-success">This Telegram account is connected. You can select it in the message composer.</div>
+    <form action="/accounts/{{ account['id'] }}/verify" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-secondary">Check session (no messages sent)</button></form>
+    {% else %}
+    <div class="alert alert-neutral">Telegram will send a one-time code to your Telegram app. Enter the code only into this protected website.</div>
+    <form action="/accounts/{{ account['id'] }}/request-code" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-secondary">Send / resend Telegram code</button></form>
+    {% endif %}
+  </section>
+  <section class="panel"><h2>Finish signing in</h2>
+    {% if account['state']=='code_sent' %}
+    <p class="subtle">Enter the verification code you received from Telegram.</p>
+    <form method="post" action="/accounts/{{ account['id'] }}/verify-code" class="stack-form"><input type="hidden" name="csrf" value="{{ csrf }}"><label>Telegram login code</label><input name="code" inputmode="numeric" autocomplete="one-time-code" required placeholder="Enter your code"><button class="btn btn-primary">Verify code</button></form>
+    {% elif account['state']=='password_required' %}
+    <p class="subtle">This account uses Telegram two-step verification.</p>
+    <form method="post" action="/accounts/{{ account['id'] }}/verify-password" class="stack-form"><input type="hidden" name="csrf" value="{{ csrf }}"><label>Telegram 2FA password</label><input name="password" type="password" autocomplete="off" required placeholder="Your Telegram cloud password"><button class="btn btn-primary">Finish authentication</button></form>
+    {% elif account['state']=='connected' %}
+    <div class="empty-state"><span class="empty-icon success-icon">✓</span><h3>Account ready</h3><p>Use it to send personal messages to eligible contacts.</p><a href="/compose" class="btn btn-primary">Create broadcast</a></div>
+    {% else %}
+    <div class="empty-state"><span class="empty-icon">◎</span><h3>Awaiting verification</h3><p>Request a Telegram code to begin.</p></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

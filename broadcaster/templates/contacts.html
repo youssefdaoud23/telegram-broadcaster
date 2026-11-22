@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow accent">AUDIENCE DATABASE</span><h1>Your contacts</h1><p class="subtle">Add, import, update, or remove Telegram recipients.</p></div><a class="btn btn-outline" href="/contacts/export">↓ Export CSV</a></div>
+<div class="contacts-grid">
+  <section class="panel"><div class="panel-head"><h2>Contact list <span class="count-pill">{{ contacts|length }}</span></h2></div>
+    <form class="search-row" action="/contacts" method="get"><input name="q" value="{{ query }}" placeholder="Search by name, username, or phone…"><button class="btn btn-secondary">Search</button></form>
+    <div class="table-scroll"><table class="contacts-table"><thead><tr><th>Contact</th><th>Telegram identifier</th><th>Eligibility</th><th></th></tr></thead><tbody>
+    {% for c in contacts %}
+    <tr><td><div class="person-cell"><span class="contact-avatar">{{ c['name'][:1]|upper }}</span><div><a class="table-primary" href="/contacts/{{ c['id'] }}/edit">{{ c['name'] }}</a><div class="table-secondary">{{ c['notes'][:60] or '—' }}</div></div></div></td>
+    <td><span class="mono">{{ c['username'] or c['phone'] or c['user_id'] }}</span></td>
+    <td>{% if not c['enabled'] %}<span class="status status-muted">Disabled</span>{% elif c['consent'] %}<span class="status status-connected">Opted in</span>{% else %}<span class="status status-pending">No consent</span>{% endif %}</td>
+    <td class="actions-cell"><a class="icon-button" title="Edit" href="/contacts/{{ c['id'] }}/edit">Edit</a>
+    <form method="post" action="/contacts/{{ c['id'] }}/remove" class="inline-form" data-confirm="Remove this contact from active recipients?"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="icon-button danger-text">Remove</button></form></td></tr>
+    {% else %}<tr><td colspan="4"><div class="empty-state"><span class="empty-icon">♧</span><h3>No contacts found</h3><p>Add one using the form, or import your existing list.</p></div></td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <div class="side-stack">
+    <section class="panel"><div class="panel-head"><div><h2>Add contact</h2><p class="subtle">Username, phone, or user ID.</p></div></div>
+      <form action="/contacts" method="post" class="stack-form compact">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label>Name <span class="req">*</span></label><input name="name" required maxlength="120" placeholder="e.g. Alex Morgan">
+        <label>Telegram username</label><input name="username" placeholder="@alexmorgan">
+        <div class="input-grid"><div><label>Phone</label><input name="phone" placeholder="+420…"></div><div><label>User ID</label><input name="user_id" placeholder="Optional"></div></div>
+        <label>Notes</label><textarea name="notes" rows="2" maxlength="1000" placeholder="Optional"></textarea>
+        <label class="checkline"><input type="checkbox" name="enabled" value="yes" checked> Contact is active</label>
+        <label class="checkline"><input type="checkbox" name="consent" value="yes"> Contact agreed to private messages</label>
+        <button class="btn btn-primary btn-block">＋ Add contact</button>
+      </form>
+    </section>
+    <section class="panel"><div class="panel-head"><div><h2>Import from CSV</h2><p class="subtle">Includes Google Sheets exports.</p></div></div>
+      <form action="/contacts/import" method="post" enctype="multipart/form-data" class="stack-form compact">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="file" name="file" accept=".csv,text/csv" required>
+        <small>Columns: Name, ID or Username, optional Phone / User ID / Opt In. Imports do not automatically grant consent.</small>
+        <button class="btn btn-secondary btn-block" type="submit">Import contacts</button>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

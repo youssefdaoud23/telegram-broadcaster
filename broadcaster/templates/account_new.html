@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading"><div><a class="back-link" href="/accounts">← Back to accounts</a><h1>Connect a Telegram account</h1><p class="subtle">A guided setup for your personal Telegram identity. No bot token required.</p></div></div>
+<div class="onboard-grid">
+  <section class="panel"><span class="eyebrow accent">STEP 1 OF 2</span><h2>Get your API credentials</h2><p class="subtle">Telegram provides your application's API ID and Hash. These are different from a BotFather token.</p>
+    <div class="steps">
+      <div class="step"><span>1</span><div><strong>Open Telegram's official developer portal</strong><p>Visit <a href="https://my.telegram.org/apps" target="_blank" rel="noopener noreferrer">my.telegram.org/apps ↗</a>.</p></div></div>
+      <div class="step"><span>2</span><div><strong>Sign in with your phone number</strong><p>Use the personal Telegram account you want to send from.</p></div></div>
+      <div class="step"><span>3</span><div><strong>Create an API application</strong><p>Open API Development Tools. Add an app title and short name; choose an appropriate platform such as Bot / Server.</p></div></div>
+      <div class="step"><span>4</span><div><strong>Copy your API ID and API Hash</strong><p>Enter them in the secure form. Never store them in GitHub.</p></div></div>
+    </div>
+    <div class="alert alert-neutral">You can use the same Telegram API application for more than one account. Each account gets a separate encrypted profile and Telegram session file.</div>
+  </section>
+  <section class="panel"><span class="eyebrow accent">STEP 2 OF 2</span><h2>Save your Telegram account</h2><p class="subtle">Once saved, we'll request a Telegram verification code.</p>
+    <form action="/accounts/new" method="post" class="stack-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Account label</label><input name="label" maxlength="60" required placeholder="e.g. Personal — Joe">
+      <div class="input-grid"><div><label>Telegram API ID</label><input name="api_id" inputmode="numeric" required placeholder="12345678" autocomplete="off"></div><div><label>Phone number</label><input name="phone" required placeholder="+420…" autocomplete="tel"></div></div>
+      <label>Telegram API Hash</label><input name="api_hash" type="password" maxlength="32" minlength="32" autocomplete="new-password" required placeholder="32-character API hash">
+      <label>Expected username <span class="optional">(recommended)</span></label><input name="expected_username" placeholder="@myaccount" autocomplete="off">
+      <div class="info-strip"><span>🔒</span><p>Your API Hash and phone are encrypted at rest. Telegram login codes and 2FA passwords are never stored.</p></div>
+      <button class="btn btn-primary btn-block">Save and continue <span>→</span></button>
+    </form>
+  </section>
+</div>
+{% endblock %}

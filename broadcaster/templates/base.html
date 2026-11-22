@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light"><title>{{ title or "Dashboard" }} · Telegram Broadcaster</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head><body class="{% if not user %}auth-body{% else %}dashboard-body{% endif %}">
+{% if user %}
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-symbol"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m4 12 16-8-5 16-4-7-7-1Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m11 13 9-9" stroke="currentColor" stroke-width="1.8"/></svg></span><span><strong>Telegram</strong><small>BROADCASTER</small></span></a>
+    <p class="nav-caption">WORKSPACE</p>
+    <nav aria-label="Main navigation">
+      <a href="/" class="nav-item {% if current_path=='/' %}active{% endif %}"><span class="nav-icon">◫</span>Overview</a>
+      <a href="/compose" class="nav-item {% if current_path.startswith('/compose') %}active{% endif %}"><span class="nav-icon">✉</span>New broadcast</a>
+      <a href="/contacts" class="nav-item {% if current_path.startswith('/contacts') %}active{% endif %}"><span class="nav-icon">♧</span>Contacts</a>
+      <a href="/accounts" class="nav-item {% if current_path.startswith('/accounts') %}active{% endif %}"><span class="nav-icon">◎</span>Telegram accounts</a>
+      <a href="/campaigns" class="nav-item {% if current_path.startswith('/campaigns') %}active{% endif %}"><span class="nav-icon">▤</span>History</a>
+    </nav>
+    <div class="sidebar-bottom"><span class="soft-dot"></span>Private installation <small>Contacts and sessions stay on your server.</small></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar">
+      <div class="crumbs">Workspace <span>/</span> <strong>{{ title or "Overview" }}</strong></div>
+      <div class="topbar-right">
+        {% if not send_enabled %}<span class="chip chip-amber"><span class="soft-dot"></span>Sending disabled</span>{% else %}<span class="chip chip-green"><span class="soft-dot"></span>Sending enabled</span>{% endif %}
+        <span class="user-circle" title="{{ user['username'] }}"> {{ user['username'][:1]|upper }} </span>
+        <form method="post" action="/logout" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="text-button" type="submit">Sign out</button></form>
+      </div>
+    </header>
+    <main class="content">
+    {% if notice %}<div class="notice" role="status"><span>ⓘ</span> {{ notice }}</div>{% endif %}
+    {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% else %}
+{% block public_content %}{% endblock %}
+{% endif %}
+</body></html>

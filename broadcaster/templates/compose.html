@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow accent">PERSONAL TELEGRAM MESSAGING</span><h1>New broadcast</h1><p class="subtle">One message. Separate, private conversations with each recipient.</p></div></div>
+<form action="/compose/preview" method="post" class="onboard-grid compose-grid">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<section class="panel">
+  <div class="field-section"><span class="step-number">01</span><div><h2>Sending account</h2><p class="subtle">Choose which of your connected accounts sends the message.</p></div></div>
+  {% if accounts %}
+    <label class="sr-only" for="account_id">Sending account</label>
+    <select id="account_id" name="account_id" required><option value="">Choose an account</option>{% for a in accounts %}<option value="{{ a['id'] }}">{{ a['label'] }} — {{ a['username'] or 'Connected' }}</option>{% endfor %}</select>
+  {% else %}<div class="alert alert-warning">Connect a Telegram account before composing. <a href="/accounts/new">Connect now →</a></div>{% endif %}
+  <div class="field-section spaced"><span class="step-number">02</span><div><h2>Your message</h2><p class="subtle">Every selected contact receives this as an individual Telegram message.</p></div></div>
+  <textarea id="compose-message" name="message" rows="9" maxlength="4096" required placeholder="Hi there! I wanted to share an update with you…"></textarea>
+  <div class="count-line"><span>Personal direct message · no group chat</span><span id="char-count">0 / 4096</span></div>
+  <div class="form-actions"><button type="submit" class="btn btn-primary" {% if not accounts %}disabled{% endif %}>Preview broadcast <span>→</span></button><a href="/" class="btn btn-outline">Cancel</a></div>
+  <div class="info-strip"><span>ℹ</span><p>Nothing is sent when you click Preview. You will review the exact recipients and press Send on the next screen.</p></div>
+</section>
+<section class="panel">
+  <div class="field-section"><span class="step-number">03</span><div><h2>Choose recipients</h2><p class="subtle">Only enabled, opted-in contacts are shown.</p></div></div>
+  <div class="recipient-tools"><label class="checkline"><input type="checkbox" id="select-all"> Select all eligible</label><span class="count-pill" id="selected-count">0 selected</span></div>
+  <input type="search" id="recipient-search" placeholder="Filter recipients…" aria-label="Filter recipients">
+  <div class="recipient-scroll">
+    {% for c in contacts %}
+    <label class="recipient-row" data-search="{{ (c['name'] ~ ' ' ~ c['username'] ~ ' ' ~ c['phone'])|lower }}">
+      <input class="recipient-checkbox" name="contacts" type="checkbox" value="{{ c['id'] }}">
+      <span class="contact-avatar">{{ c['name'][:1]|upper }}</span>
+      <span class="recipient-text"><strong>{{ c['name'] }}</strong><small>{{ c['username'] or c['phone'] or c['user_id'] }}</small></span>
+    </label>
+    {% else %}<div class="empty-state"><span class="empty-icon">♧</span><h3>No eligible contacts</h3><p>Enable contacts and record their messaging consent first.</p><a href="/contacts" class="btn btn-secondary">Manage contacts</a></div>{% endfor %}
+  </div>
+  <div class="recipient-footer">Current safety limit: {{ send_limit }} recipients per broadcast. {% if not send_enabled %}Delivery is disabled until activated in server settings.{% endif %}</div>
+</section>
+</form>
+{% endblock %}

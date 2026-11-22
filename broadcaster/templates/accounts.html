@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow accent">CONNECTED IDENTITIES</span><h1>Telegram accounts</h1><p class="subtle">Connect and manage personal Telegram sending accounts securely.</p></div><a class="btn btn-primary" href="/accounts/new">＋ Connect account</a></div>
+<div class="panel"><div class="panel-head"><h2>Saved accounts</h2></div>
+{% if accounts %}<div class="account-list roomy">{% for a in accounts %}<a class="account-line" href="/accounts/{{ a['id'] }}/setup"><div class="round-avatar">{{ a['label'][:1]|upper }}</div><div><strong>{{ a['label'] }}</strong><small>{{ a['username'] or 'Telegram verification required' }}</small></div><span class="status status-{{ a['state'] }}">{{ a['state']|replace('_',' ') }}</span><span class="list-chevron">›</span></a>{% endfor %}</div>
+{% else %}<div class="empty-state spacious"><span class="empty-icon">◎</span><h3>No accounts connected</h3><p>Add your Telegram account using the guided API credentials and login process.</p><a class="btn btn-primary" href="/accounts/new">Connect an account</a></div>{% endif %}
+</div>
+<div class="bottom-tip"><span>🔑</span><div><strong>Your credentials stay private</strong><p>API hashes and phone numbers are encrypted in the server database. Login codes and two-step verification passwords are used only for Telegram authentication and are never stored.</p></div></div>
+{% endblock %}

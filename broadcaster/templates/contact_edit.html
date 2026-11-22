@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading"><div><a class="back-link" href="/contacts">← Back to contacts</a><h1>Edit {{ contact['name'] }}</h1><p class="subtle">Update contact details and messaging eligibility.</p></div></div>
+<div class="panel narrow-panel"><form class="stack-form" method="post" action="/contacts/{{ contact['id'] }}/edit">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Name</label><input name="name" required maxlength="120" value="{{ contact['name'] }}">
+<label>Telegram username</label><input name="username" value="{{ contact['username'] }}" placeholder="@username">
+<div class="input-grid"><div><label>Phone</label><input name="phone" value="{{ contact['phone'] }}"></div><div><label>Telegram user ID</label><input name="user_id" value="{{ contact['user_id'] }}"></div></div>
+<label>Notes</label><textarea rows="3" name="notes" maxlength="1000">{{ contact['notes'] }}</textarea>
+<label class="checkline"><input type="checkbox" name="enabled" value="yes" {% if contact['enabled'] %}checked{% endif %}> Active contact</label>
+<label class="checkline"><input type="checkbox" name="consent" value="yes" {% if contact['consent'] %}checked{% endif %}> Agreed to receive private messages</label>
+<div class="form-actions"><button class="btn btn-primary">Save contact</button><a href="/contacts" class="btn btn-outline">Cancel</a></div>
+</form></div>
+{% endblock %}

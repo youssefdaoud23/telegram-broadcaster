@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow accent">MESSAGE HISTORY</span><h1>Broadcasts</h1><p class="subtle">A clear record of campaigns and delivery outcomes.</p></div><a href="/compose" class="btn btn-primary">＋ New broadcast</a></div>
+<section class="panel"><div class="panel-head"><h2>Recent campaigns</h2></div><div class="table-scroll"><table>
+<thead><tr><th>Account</th><th>Created</th><th>Recipients</th><th>Sent</th><th>State</th><th></th></tr></thead>
+<tbody>{% for c in campaigns %}<tr>
+<td><a href="/campaigns/{{ c['id'] }}" class="table-primary">{{ c['label'] }}</a></td><td>{{ c['created_at']|moment }}</td><td>{{ c['total'] }}</td><td>{{ c['sent'] }}</td><td><span class="status status-{{ c['state'] }}">{{ c['state'] }}</span></td><td><a class="text-link" href="/campaigns/{{ c['id'] }}">Details →</a></td>
+</tr>{% else %}<tr><td colspan="6"><div class="empty-state"><span class="empty-icon">▤</span><h3>No campaigns yet</h3><p>Your future broadcast history will appear here.</p></div></td></tr>{% endfor %}</tbody>
+</table></div></section>
+{% endblock %}
