@@ -629,3 +629,45 @@ label { color: var(--tg-text); }
   .bulk-consent-form input[name="evidence"] {min-width:0;width:100%;}
   .contacts-bulk-action-area .form-actions {flex-direction:column;align-items:stretch;}
 }
+
+
+/* Contacts: usable live filters, separately visible phone numbers and status toggles. */
+.contacts-grid.contacts-grid-wide{grid-template-columns:minmax(0,1fr)}
+.contacts-grid-wide .side-stack{grid-template-columns:repeat(2,minmax(0,1fr))}
+.contact-filter-bar{display:grid;grid-template-columns:minmax(240px,1fr) minmax(210px,310px);gap:14px;align-items:end;margin-bottom:10px}
+.contact-filter-field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.contact-filter-field label{font-size:12px}
+.contact-filter-field input,.contact-filter-field select{min-width:0;width:100%;max-width:100%;min-height:44px}
+.contact-filter-bar .btn[hidden]{display:none}
+.contact-filter-hint{margin:0 0 18px;font-size:11px}
+.contacts-table{min-width:1030px}
+.contacts-table tr[hidden],.contacts-table #contacts-filter-empty[hidden]{display:none}
+.contacts-table th,.contacts-table td{padding-left:9px;padding-right:9px}
+.contacts-table .contact-phone{white-space:nowrap;font-size:11px}
+.contacts-table .contact-group-tags{max-width:200px}
+.contacts-table .table-secondary{max-width:200px;overflow-wrap:anywhere}
+.contact-status-switch{display:inline-flex;align-items:center;justify-content:flex-start;gap:8px;padding:7px 3px;border:0;border-radius:12px;background:transparent;color:var(--tg-muted,#75839a);font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer;flex:0 0 auto}
+.contact-status-switch-track{display:inline-flex;align-items:center;width:35px;height:20px;padding:2px;border-radius:20px;background:#bac3cf;transition:background .15s}
+.contact-status-switch-track>span{display:block;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0002;transition:transform .15s}
+.contact-status-switch.is-active .contact-status-switch-track{background:#29a577}
+.contact-status-switch.is-active .contact-status-switch-track>span{transform:translateX(15px)}
+.contact-status-switch.is-active{color:var(--tg-text,#23344c)}
+.contact-status-switch:hover{background:var(--tg-hover,#eff4fb)}
+.contact-status-switch:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.advanced-permission-tools{padding:12px 15px;border:1px solid var(--tg-outline,#e1e6ee);border-radius:12px;background:var(--tg-surface-alt,#f7f9fc);margin-top:5px}
+.advanced-permission-tools summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--tg-text,#263b54)}
+.advanced-permission-tools[open]>.subtle{margin:13px 0}
+.advanced-permission-tools .contacts-bulk-form{margin-top:12px}
+.contacts-active-form{align-items:center}
+.contacts-active-form>strong{font-size:12px;margin-right:auto}
+.group-member-contact{gap:4px}
+.group-member-row .contact-status-switch{margin-left:auto}
+.group-member-row .contact-phone{font-family:ui-monospace,Consolas,monospace}
+@media(max-width:1000px){
+  .contacts-grid-wide .side-stack{grid-template-columns:1fr}
+}
+@media(max-width:690px){
+  .contact-filter-bar{grid-template-columns:minmax(0,1fr);gap:9px}
+  .group-member-row{flex-wrap:wrap}
+  .group-member-row .contact-status-switch{margin-left:34px}
+}

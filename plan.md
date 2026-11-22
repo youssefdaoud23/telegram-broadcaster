@@ -1,5 +1,17 @@
 # Telegram Broadcaster - Status and plan
 
+## Contact management UI and instant filtering (2026-11-22)
+
+- [x] Replace cramped search row with full-width search and a group filter that update as the user types/selects.
+- [x] Search all imported text fields: name, username, phone, Telegram ID, notes and group labels.
+- [x] Keep filter selection safe: hidden selected contacts are deselected; select-all covers only visible results.
+- [x] Show username, Telegram-visible phone and numeric ID separately on Contacts and group member pages.
+- [x] Replace large whole-group consent panel with Active/Inactive controls for group and individual contacts.
+- [x] Add owner-scoped contact, selected-contact and group active status endpoints; do not change consent or broadcasting.
+- [x] Move bulk permission controls under an advanced disclosure without removing the existing verified-permission enforcement.
+- [ ] Complete new active-status and filter regression tests and fresh Docker smoke run.
+- [ ] Deploy only with a verified database backup and no active sending; verify live filters and status changes.
+
 ## Archived contact re-import recovery (2026-11-22)
 - [x] Reproduce the bug: removed contacts are soft-archived, so subsequent direct imports skip every matching member.
 - [x] Restore matching archived contacts only on explicit scan or CSV import, reusing their original IDs and preserving previous groups/history.

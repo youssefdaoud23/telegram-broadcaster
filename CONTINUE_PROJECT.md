@@ -91,6 +91,20 @@ Before making any changes:
     cross-workspace/CSRF validation and the 5,000-member import bound.
 
 
+23a. Contact management interface (2026-11-22): show available phone numbers
+     and Telegram numeric IDs separately from usernames in Contacts and group
+     member lists; never infer inaccessible phone numbers. Search on Contacts
+     updates immediately for names, usernames, phone, numeric ID, notes,
+     and group labels; group dropdown also filters locally without reload.
+     Only visible contacts are selected by Select all. The group editor's
+     bulky consent panel has been replaced with individual and whole-group
+     Active/Inactive switches, backed by owner-scoped status routes changing
+     only enabled, not consent, history, or memberships. Bulk status changes
+     are also supported on Contacts. Existing verified messaging-permission
+     controls remain available under Advanced on Contacts, because receiving
+     a username or group membership is not automatic private-message consent.
+     Sending still requires consent and enabled status; never bypass that.
+
 24. A newly added bulk consent feature has selected-contact and whole-group
     operations. Explicitly verified direct individual permission and an
     evidence/source note are required for granting. Group membership,

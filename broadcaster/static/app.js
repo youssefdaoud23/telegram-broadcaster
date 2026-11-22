@@ -66,44 +66,90 @@ document.addEventListener("DOMContentLoaded",()=>{
   const bulkContactChecks=[...document.querySelectorAll(".bulk-contact-checkbox")];
   const bulkContactSelectAll=document.getElementById("bulk-select-all");
   const bulkContactCount=document.getElementById("bulk-contact-count");
-  const bulkContactForm=document.getElementById("bulk-contact-group-form");
-  if(bulkContactChecks.length){
-    const refreshBulkContacts=()=>{
-      const selected=bulkContactChecks.filter(c=>c.checked).length;
-      if(bulkContactCount)bulkContactCount.textContent=selected+" selected";
-      if(bulkContactSelectAll)bulkContactSelectAll.checked=selected===bulkContactChecks.length;
-      for(const button of document.querySelectorAll(
-        '#bulk-contact-group-form button[type="submit"],form[data-bulk-selected] button[type="submit"]'
-      )){
-        button.disabled=selected===0;
-      }
-    };
-    if(bulkContactSelectAll)bulkContactSelectAll.addEventListener("change",()=>{
-      for(const checkbox of bulkContactChecks)checkbox.checked=bulkContactSelectAll.checked;
-      refreshBulkContacts();
-    });
-    for(const checkbox of bulkContactChecks)checkbox.addEventListener("change",refreshBulkContacts);
-    for(const form of document.querySelectorAll("form[data-bulk-selected]")){
-      form.addEventListener("submit",(event)=>{
-        if(event.defaultPrevented)return;
-        form.querySelectorAll('input[data-bulk-copy]').forEach(c=>c.remove());
-        const selected=bulkContactChecks.filter(c=>c.checked);
-        if(!selected.length){
-          event.preventDefault();
-          return;
-        }
-        for(const checkbox of selected){
-          const copy=document.createElement("input");
-          copy.type="hidden";
-          copy.name="contacts";
-          copy.value=checkbox.value;
-          copy.setAttribute("data-bulk-copy","");
-          form.appendChild(copy);
-        }
-      });
+  const contactSearch=document.getElementById("contacts-filter-search");
+  const contactGroup=document.getElementById("contacts-filter-group");
+  const contactRows=[...document.querySelectorAll(".contact-filter-row")];
+  const foldContactSearch=value=>String(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase();
+  // Index once; large contact lists must not reparse every row on each key.
+  const indexedContacts=contactRows.map(row=>{
+    const text=foldContactSearch((row.getAttribute("data-contact-search")||"")+" "+row.textContent);
+    return {row,text,digits:text.replace(/[^0-9]/g,""),
+      groupIds:row.getAttribute("data-contact-groups")||"",
+      checkbox:row.querySelector(".bulk-contact-checkbox")};
+  });
+  const contactResultCount=document.getElementById("contact-filter-count");
+  const contactNoResults=document.getElementById("contacts-filter-empty");
+  const contactFilterForm=document.querySelector(".contact-filter-bar");
+  const contactFilterSubmit=document.getElementById("contacts-filter-submit");
+  if(contactFilterSubmit)contactFilterSubmit.hidden=true;
+
+  const visibleContactChecks=()=>bulkContactChecks.filter(
+    c=>!c.closest(".contact-filter-row").hidden
+  );
+  const refreshBulkContacts=()=>{
+    const selected=bulkContactChecks.filter(c=>c.checked).length;
+    const shown=visibleContactChecks();
+    const shownSelected=shown.filter(c=>c.checked).length;
+    if(bulkContactCount)bulkContactCount.textContent=selected+" selected";
+    if(bulkContactSelectAll){
+      bulkContactSelectAll.checked=shown.length>0&&shownSelected===shown.length;
+      bulkContactSelectAll.indeterminate=shownSelected>0&&shownSelected<shown.length;
     }
+    for(const button of document.querySelectorAll(
+      '#bulk-contact-group-form button[type="submit"],form[data-bulk-selected] button[type="submit"]'
+    )){
+      button.disabled=selected===0;
+    }
+  };
+  const filterContacts=()=>{
+    const needle=contactSearch ? foldContactSearch(contactSearch.value.trim()) : "";
+    const digits=needle.replace(/[^0-9]/g,"");
+    const group=contactGroup ? contactGroup.value : "0";
+    let count=0;
+    for(const item of indexedContacts){
+      const matchText=(!needle||item.text.includes(needle)||
+        (digits.length>=3&&item.digits.includes(digits)));
+      const matchGroup=group==="0"||item.groupIds.includes("|"+group+"|");
+      item.row.hidden=!(matchText&&matchGroup);
+      if(!item.row.hidden)count++;
+      else if(item.checkbox)item.checkbox.checked=false; // Never bulk-edit filtered-out contacts.
+    }
+    if(contactResultCount)contactResultCount.textContent=count+" of "+contactRows.length+" shown";
+    if(contactNoResults)contactNoResults.hidden=count!==0||contactRows.length===0;
     refreshBulkContacts();
+  };
+  if(contactFilterForm)contactFilterForm.addEventListener("submit",event=>{
+    event.preventDefault();
+    filterContacts();
+  });
+  if(contactSearch)contactSearch.addEventListener("input",filterContacts);
+  if(contactGroup)contactGroup.addEventListener("change",filterContacts);
+  if(bulkContactSelectAll)bulkContactSelectAll.addEventListener("change",()=>{
+    for(const box of visibleContactChecks())box.checked=bulkContactSelectAll.checked;
+    refreshBulkContacts();
+  });
+  for(const checkbox of bulkContactChecks)checkbox.addEventListener("change",refreshBulkContacts);
+  for(const form of document.querySelectorAll("form[data-bulk-selected]")){
+    form.addEventListener("submit",event=>{
+      if(event.defaultPrevented)return;
+      form.querySelectorAll('input[data-bulk-copy]').forEach(c=>c.remove());
+      const selected=bulkContactChecks.filter(c=>c.checked);
+      if(!selected.length){
+        event.preventDefault();
+        return;
+      }
+      for(const checkbox of selected){
+        const copy=document.createElement("input");
+        copy.type="hidden";
+        copy.name="contacts";
+        copy.value=checkbox.value;
+        copy.setAttribute("data-bulk-copy","");
+        form.appendChild(copy);
+      }
+    });
   }
+  if(contactSearch||contactGroup)filterContacts();
+  else refreshBulkContacts();
   const groupMemberChecks=[...document.querySelectorAll(".group-member-checkbox")];
   const groupMemberSearch=document.getElementById("group-member-search");
   const groupMemberCount=document.getElementById("group-member-count");
