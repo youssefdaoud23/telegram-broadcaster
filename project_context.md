@@ -20,7 +20,7 @@ Do not change or restart any existing service for the new application.
 
 ## Architecture
 
-- Independent FastAPI container, web bind 127.0.0.1:8789:8080.
+- Independent FastAPI container, host port 8789:8080 following the same direct host-port publishing pattern as existing n8n. Route from Cloudflare tunnel via public host IP:8789. Direct origin port needs firewall restrictions.
 - App SQLite database in /data/broadcaster.sqlite3, protected storage in /data/telegram_sessions.
 - Account API hashes and phone encrypted using APP_ENCRYPTION_KEY provided only in protected server-side .env.
 - Website admin created by CLI with scrypt password hash.
