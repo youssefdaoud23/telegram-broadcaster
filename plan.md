@@ -25,5 +25,7 @@ Operational boundary: do not touch existing n8n or legacy personal Telegram brid
 The new server directory is /root/n8n/telegram-broadcaster and has the verified main branch. The 0600 .env exists with SEND_ENABLED=false, and localhost port 8789 is available. `data/` was created as root:root mode 0700; the Docker app runs as UID 10001, so an SSH operator must run `chown 10001:10001 data` before first startup. The Joe MCP privileged terminal is not authorized for this directory. No container was started and no Telegram messages were sent. GitHub Actions workflow was removed per user request; tests are run locally.
 
 - [x] Diagnose public hostname origin refusal: broadcaster runs only at 127.0.0.1:8789.
-- [x] Add private connection to existing cloudflare_default Docker network; no new public host binding.
-- [ ] Apply Compose change to running broadcaster container, update Cloudflare tunnel route to http://telegram-broadcaster-origin:8080, set secure cookies, and verify HTTPS health/login.
+- [x] Replace extra Docker-network approach with same direct host-port exposure as n8n (`8789:8080`).
+- [ ] Recreate only broadcaster service to apply new port mapping, then verify health from the public origin IP.
+- [ ] Set Cloudflare Tunnel origin for telegram-broadcaster.youssefdaoud.com to http://72.61.177.85:8789 and verify HTTPS login.
+- [ ] Apply firewall-origin restrictions; Cloudflare Access alone does not protect the direct IP:port.
