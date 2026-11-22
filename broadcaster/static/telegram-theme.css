@@ -455,14 +455,71 @@ label { color: var(--tg-text); }
 .reuse-presets button {min-height:29px; font-size:11px; padding:5px 10px; white-space:normal;}
 
 /* Read-only Telegram group username discovery and export. */
-.group-export-panel {margin-top:18px;max-width:950px;}
-.group-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:15px;max-height:490px;overflow:auto;}
-.group-export-item {display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px;border:1px solid var(--tg-outline);border-radius:13px;background:var(--tg-surface-alt);}
-.group-export-item:hover {background:var(--tg-hover);}
-.group-export-item input {accent-color:var(--blue);flex-shrink:0;}
-.group-export-label {display:flex;flex-direction:column;gap:3px;min-width:0;}
-.group-export-label strong {overflow-wrap:anywhere;}
-.group-export-label small {color:var(--tg-muted);}
+.group-export-panel { margin-top: 18px; max-width: 950px; }
+.group-search { display: grid; gap: 8px; margin-bottom: 12px; }
+.group-search label { font-size: 12px; }
+.group-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+  margin-top: 12px;
+  max-height: 430px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px;
+}
+.group-export-item {
+  display: grid;
+  grid-template-columns: 18px 39px minmax(0, 1fr);
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  cursor: pointer;
+  padding: 12px 14px;
+  border: 1px solid var(--tg-outline);
+  border-radius: 13px;
+  background: var(--tg-surface-alt);
+}
+.group-export-item:hover { background: var(--tg-hover); }
+.group-export-item:focus-within { outline: 2px solid var(--blue); outline-offset: 1px; }
+.group-export-item:has(input[type="radio"]:checked) {
+  border-color: var(--blue);
+  background: var(--tg-hover);
+}
+.group-export-item[hidden] { display: none; }
+.group-export-item input[type="radio"] {
+  appearance: auto;
+  display: block;
+  width: 17px;
+  min-width: 17px;
+  height: 17px;
+  min-height: 17px;
+  max-width: 17px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 17px;
+  accent-color: var(--blue);
+}
+.group-export-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--ink);
+}
+.group-export-label strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.group-export-label small { display: block; font-size: 11px; color: var(--tg-muted); }
+.group-match-summary { color: var(--tg-muted); font-size: 11px; margin: 8px 0 0; }
+.group-no-match { padding: 18px; color: var(--tg-muted); text-align: center; }
 .group-scan-stats {flex-wrap:wrap;justify-content:flex-start;}
 .group-scan-stats > div {min-width:125px;flex:1;}
 .group-usernames {display:flex;gap:8px;flex-wrap:wrap;}

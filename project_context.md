@@ -155,3 +155,18 @@ API iteration ended, not guaranteed complete group membership.
 Partial/limited scans display warnings and export status.
 Call out that membership is not consent for unsolicited messaging.
 Do not silently start a scan against the live Telegram account.
+
+
+## Group export picker layout fix (2026-11-22)
+
+Screenshot showed two large blank group cards with centered radio buttons,
+horizontal overflow, and group names pushed offscreen. Root cause:
+minified `broadcaster/static/app.css` applied
+`input:not([type=checkbox]):not([type=file]){width:100%;...}`
+to type=radio, while the group flex row prevented radio shrink.
+Fixed by excluding type=radio from text field styles and replacing
+the group picker grid with a single-column, compact row layout,
+explicitly sized radios, text wrapping, keyboard focus and selected
+state styling. Added name search with visible count and no-match state;
+filtering deselects any hidden selected radio. No Telethon/group scan
+behavior or user data is changed. Includes regression tests.

@@ -139,7 +139,29 @@ class GroupExportFeatureTests(unittest.TestCase):
         self.assertNotIn("Announcements channel",page.text)
         self.assertNotIn("Direct chat",page.text)
         self.assertIn('value="-7"',page.text)
+        self.assertIn('id="group-search"',page.text)
+        self.assertIn('data-group-name="a private group"',page.text)
+        self.assertIn('<strong>A private group</strong>',page.text)
+        self.assertIn('<strong>Community supergroup</strong>',page.text)
+        self.assertIn('id="group-no-match"',page.text)
         self.fake.send_message.assert_not_awaited()
+
+    def test_group_selection_layout_keeps_radio_compact(self):
+        root=Path(__file__).resolve().parents[1]
+        base=(root/"broadcaster/static/app.css").read_text()
+        theme=(root/"broadcaster/static/telegram-theme.css").read_text()
+        js=(root/"broadcaster/static/app.js").read_text()
+        # The old broad text-input selector erroneously gave radio
+        # buttons width:100% and pushed their group labels offscreen.
+        self.assertIn(
+            "input:not([type=checkbox]):not([type=file]):not([type=radio])",
+            base,
+        )
+        self.assertIn('.group-export-item input[type="radio"]',theme)
+        self.assertIn('grid-template-columns: 18px 39px minmax(0, 1fr)',theme)
+        self.assertIn('.group-export-item[hidden] { display: none; }',theme)
+        self.assertIn('grid-template-columns: minmax(0, 1fr)',theme)
+        self.assertIn('const groupSearch=document.getElementById("group-search")',js)
 
     def test_export_only_accessible_nonbot_unique_safe_usernames(self):
         token=self._begin()

@@ -47,6 +47,28 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   });
   refreshRecipients();
+  const groupSearch=document.getElementById("group-search");
+  if(groupSearch){
+    const groupRows=[...document.querySelectorAll(".group-export-item[data-group-name]")];
+    const summary=document.getElementById("group-match-summary");
+    const noMatch=document.getElementById("group-no-match");
+    const filterGroups=()=>{
+      const query=groupSearch.value.trim().toLocaleLowerCase();
+      let visible=0;
+      for(const row of groupRows){
+        const match=row.getAttribute("data-group-name").includes(query);
+        row.hidden=!match;
+        if(!match){
+          const radio=row.querySelector('input[type="radio"]');
+          if(radio) radio.checked=false;
+        }else visible++;
+      }
+      if(summary) summary.textContent=visible+" of "+groupRows.length+" groups shown";
+      if(noMatch) noMatch.hidden=visible!==0;
+    };
+    groupSearch.addEventListener("input",filterGroups);
+    filterGroups();
+  }
   const groupProgress=document.querySelector("[data-group-scan-refresh]");
   if(groupProgress && groupProgress.getAttribute("data-group-scan-refresh")==="true"){
     window.setTimeout(()=>window.location.reload(),3000);

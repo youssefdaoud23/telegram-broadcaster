@@ -54,6 +54,19 @@ a group, or scans private conversations. It is owner-isolated: each site
 user can access only groups belonging to their own connected Telegram
 account and export results of their own scans.
 
+### Group picker layout
+
+The group picker displays one compact group per row with the group name
+and group type visible next to a normal-sized radio selector. The search
+box filters the accessible group list locally without additional Telegram
+requests. If a selected group is filtered out, it is deselected so a
+hidden group cannot be scanned accidentally.
+
+The global input styles explicitly exclude radio controls. Previously,
+the text input width rule also applied to the group radio selectors,
+stretching them across the card, hiding the group name and creating
+horizontal scrolling. CSS regression tests protect this behavior.
+
 ## Telegram Web-inspired interface
 
 The web interface uses a Telegram-inspired day/night visual theme with rounded

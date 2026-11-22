@@ -43,15 +43,21 @@
   <form method="post" action="/groups/scans">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <input type="hidden" name="account_id" value="{{ account_id }}">
+    <div class="group-search">
+      <label for="group-search">Find a group</label>
+      <input id="group-search" type="search" placeholder="Search groups by name..." autocomplete="off">
+    </div>
     <div class="group-list" role="radiogroup" aria-label="Telegram group">
       {% for group in groups %}
-      <label class="group-export-item">
+      <label class="group-export-item" data-group-name="{{ group['name']|lower }}">
         <input type="radio" name="peer_id" value="{{ group['peer_id'] }}" required>
-        <span class="round-avatar">{{ group['name'][:1]|upper }}</span>
+        <span class="round-avatar" aria-hidden="true">{{ group['name'][:1]|upper }}</span>
         <span class="group-export-label"><strong>{{ group['name'] }}</strong><small>{{ group['kind'] }}</small></span>
       </label>
       {% endfor %}
     </div>
+    <p id="group-match-summary" class="group-match-summary" role="status">{{ groups|length }} groups available</p>
+    <p id="group-no-match" class="group-no-match" hidden>No groups match your search.</p>
     <div class="form-actions"><button type="submit" class="btn btn-primary">Scan selected group</button></div>
   </form>
   {% else %}

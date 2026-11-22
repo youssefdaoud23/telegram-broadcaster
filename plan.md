@@ -145,3 +145,14 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
       when no broadcasts are active, and verify the Group export UI.
 - [ ] With an explicitly selected real group, manually verify Telegram
       returns the participants that account is allowed to view.
+
+
+## Group export picker UI correction (2026-11-22)
+
+- [x] Reproduce and diagnose full-width radio selectors in group list.
+- [x] Exclude type=radio from global text-input sizing rule.
+- [x] Render compact one-column group rows with visible names/types.
+- [x] Add client-side search and selected-hidden-group protection.
+- [x] Add regression checks for CSS, HTML and group list data rendering.
+- [ ] Pull and rebuild production only when no campaign is sending;
+      confirm normal group list appearance in desktop and mobile browsers.
