@@ -289,5 +289,146 @@ class DirectGroupImportTests(unittest.TestCase):
                               follow_redirects=False).status_code,403)
 
 
+    def test_exported_scan_csv_restores_group_without_manual_assignment(self):
+        self.make_scan(title="Prague Customers")
+        exported=self.http.get("/groups/scans/scan-token-123/export")
+        self.assertEqual(exported.status_code,200)
+        self.assertIn("Telegram Group",exported.text)
+        self.assertIn("Prague Customers",exported.text)
+        result=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf},
+            files={"file":("telegram-group-members.csv",exported.content,"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(result.status_code,303)
+        with core.database() as db:
+            group=core.contact_groups(db,self.owner_id)[0]
+            self.assertEqual(group["name"],"Prague Customers")
+            self.assertEqual(group["total"],3)
+            self.assertEqual(group["eligible"],0)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM contacts WHERE owner_id=?",
+                (self.owner_id,),
+            ).fetchone()[0],3)
+        self.assertIn(f"/contacts/groups/{group['id']}",result.headers["location"])
+        page=self.http.get(f"/contacts/groups/{group['id']}")
+        self.assertIn("3 selected",page.text)
+
+    def test_csv_reuses_existing_disabled_contact_and_preserves_other_groups(self):
+        self.make_scan(members=[
+            group_export.ExportMember("Alice New Name","alice_member_2","", "123456789")
+        ])
+        with core.database() as db:
+            existing=core.insert_contact(
+                db,core.normalize_contact(
+                    "Original Name","@alice_member_2","","","Keep this note",
+                ),self.owner_id,consent=True,enabled=False,
+            )
+            old_group=core.add_contact_group(db,self.owner_id,"Previous Group")
+            core.set_contact_groups(db,self.owner_id,existing,[old_group])
+            db.commit()
+        data=self.http.get("/groups/scans/scan-token-123/export").content
+        for _ in range(2):
+            result=self.http.post(
+                "/contacts/import",data={"csrf":self.csrf},
+                files={"file":("members.csv",data,"text/csv")},
+                follow_redirects=False,
+            )
+            self.assertEqual(result.status_code,303)
+        with core.database() as db:
+            groups=core.contact_groups(db,self.owner_id)
+            new_group=next(g["id"] for g in groups if g["name"]=="Prague Customers")
+            contact=db.execute("SELECT * FROM contacts WHERE id=?",(existing,)).fetchone()
+            self.assertEqual(contact["name"],"Original Name")
+            self.assertEqual(contact["notes"],"Keep this note")
+            self.assertEqual(contact["user_id"],"123456789")
+            self.assertEqual((contact["consent"],contact["enabled"]),(1,0))
+            self.assertEqual(core.contact_group_map(db,self.owner_id)[existing],
+                             {old_group,new_group})
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
+
+    def test_explicit_csv_group_and_flags_are_idempotent(self):
+        raw=("Name,Username,Enabled,Opt In\\n"
+             "Disabled,@disabled_csv_1,no,no\\n"
+             "Opted In,@enabled_csv_1,yes,yes\\n").encode()
+        for _ in range(2):
+            result=self.http.post(
+                "/contacts/import",
+                data={"csrf":self.csrf,"group_name":"Imported Archive"},
+                files={"file":("contacts.csv",raw,"text/csv")},
+                follow_redirects=False,
+            )
+            self.assertEqual(result.status_code,303)
+        with core.database() as db:
+            rows=db.execute(
+                "SELECT name,enabled,consent FROM contacts WHERE owner_id=? "
+                "ORDER BY name",(self.owner_id,),
+            ).fetchall()
+            self.assertEqual(len(rows),2)
+            self.assertEqual((rows[0]["enabled"],rows[0]["consent"]),(0,0))
+            self.assertEqual((rows[1]["enabled"],rows[1]["consent"]),(1,1))
+            self.assertEqual(core.contact_groups(db,self.owner_id)[0]["total"],2)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM contact_group_members"
+            ).fetchone()[0],2)
+        self.assertIn("already",result.headers["location"])
+
+    def test_csv_over_thousand_rows_is_not_silently_truncated(self):
+        raw="Name,Telegram User ID,Telegram Group\\n"+"".join(
+            f"Person {i},{500000000+i},Big Group\\n" for i in range(1001)
+        )
+        response=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf},
+            files={"file":("large.csv",raw.encode(),"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code,303)
+        with core.database() as db:
+            group=core.contact_groups(db,self.owner_id)[0]
+            self.assertEqual(group["total"],1001)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1001)
+        self.assertIn("Imported%201001%20contacts",response.headers["location"])
+
+    def test_csv_exceeding_safety_limit_rejects_without_writes(self):
+        raw="Name,Telegram User ID\\n"+"".join(
+            f"Person {i},{500000000+i}\\n" for i in range(5001)
+        )
+        response=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf,"group_name":"Would Not Exist"},
+            files={"file":("oversize.csv",raw.encode(),"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code,303)
+        self.assertIn("rejected",response.headers["location"].lower())
+        with core.database() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contact_groups").fetchone()[0],0)
+
+    def test_csv_conflict_rolls_back_new_group_and_preserves_archived_record(self):
+        with core.database() as db:
+            old=core.insert_contact(
+                db,core.normalize_contact(
+                    "Archived","@archived_user1","","123456789","Do not restore"
+                ),self.owner_id,consent=True,enabled=False,
+            )
+            db.execute("UPDATE contacts SET archived=1 WHERE id=?",(old,))
+            db.commit()
+        raw=("Name,Username,Telegram User ID,Telegram Group\\n"
+             "Archived,@archived_user1,123456789,Should Not Be Created\\n")
+        response=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf},
+            files={"file":("archived.csv",raw.encode(),"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code,303)
+        self.assertIn("1%20skipped",response.headers["location"])
+        with core.database() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contact_groups").fetchone()[0],0)
+            self.assertEqual(db.execute(
+                "SELECT archived,enabled,consent FROM contacts WHERE id=?",(old,)
+            ).fetchone(),(1,0,1))
+
+
 if __name__=="__main__":
     unittest.main()
