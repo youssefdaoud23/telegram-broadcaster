@@ -12,3 +12,6 @@ Before making any changes:
 8. Multi-user data is isolated by admins.id in SQL and worker checks. New endpoints must enforce owner_id and active role; never query across workspaces or reuse Telegram session IDs.
 9. Before deploying a schema migration, require a tested SQLite online backup, verify the target legacy admin mapping, and avoid restarts during active sends.
 10. Typography: Avoid Unicode em dashes (U+2014) throughout code, HTML, CSS, JavaScript, and documentation. Use the ASCII hyphen (-) instead.
+
+11. Production install target is /opt/telegram-broadcaster. If it remains under /root/n8n/telegram-broadcaster, use scripts/migrate_to_opt.sh from an authorized root Docker terminal. Never move only code or data, overwrite /opt target, or change n8n Compose. Require a verified SQLite backup, no active sends, then verify original counts and health.
+12. Previous campaign reuse is an explicit new draft, not automatic message resend. Account/recipient consent and owner checks apply to reuse and edit. Submitted campaigns are immutable; only unsent drafts can be edited in place. Unknown or sent statuses require deliberate recipient selection and independent Send.

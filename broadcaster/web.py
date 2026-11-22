@@ -515,14 +515,52 @@ async def account_verify(request: Request, account_id: str, csrf: str = Form("")
     return redirect(f"/accounts/{account_id}/setup",f"Verified: {name}. No messages sent.")
 
 
-@app.get("/compose")
-async def compose(request: Request):
-    user=principal(request)
-    await refresh_owner_sessions(user["admin_id"])
+async def composer_context(owner_id: int, *, source_id: str = "",
+                           draft_id: str = "") -> dict:
+    """Prepare an editable form without ever sending Telegram messages."""
+    await refresh_owner_sessions(owner_id)
+    prefill={"message":"","account_id":"","contact_ids":set(),
+             "from_campaign":"","edit_campaign":"","source":None,
+             "prior_sent":0,"prior_uncertain":0,"delivery_states":{}}
     with core.database() as db:
-        accounts = db.execute("SELECT id,label,username FROM accounts WHERE owner_id=? AND state='connected' ORDER BY label",(user["admin_id"],)).fetchall()
-        contacts = db.execute("SELECT * FROM contacts WHERE owner_id=? AND archived=0 AND enabled=1 AND consent=1 ORDER BY name COLLATE NOCASE",(user["admin_id"],)).fetchall()
-    return render(request,"compose.html",title="New broadcast",accounts=accounts,contacts=contacts)
+        accounts=db.execute(
+            "SELECT id,label,username FROM accounts WHERE owner_id=? "
+            "AND state='connected' ORDER BY label", (owner_id,),
+        ).fetchall()
+        contacts=db.execute(
+            "SELECT * FROM contacts WHERE owner_id=? AND archived=0 AND enabled=1 "
+            "AND consent=1 ORDER BY name COLLATE NOCASE", (owner_id,),
+        ).fetchall()
+        if source_id or draft_id:
+            campaign_id=draft_id or source_id
+            campaign, deliveries=core.campaign_summary(db,campaign_id,owner_id)
+            if campaign is None:
+                raise HTTPException(404, "Broadcast not found")
+            if draft_id and campaign["state"] != "draft":
+                raise HTTPException(409, "Only unsent drafts can be edited")
+            allowed={row["id"] for row in contacts}
+            prefill.update(
+                message=campaign["message"],
+                account_id=campaign["account_id"] if any(
+                    a["id"]==campaign["account_id"] for a in accounts
+                ) else "",
+                contact_ids={d["contact_id"] for d in deliveries if d["contact_id"] in allowed},
+                source=campaign,
+                from_campaign=source_id,
+                edit_campaign=draft_id,
+                prior_sent=sum(d["state"]=="sent" for d in deliveries),
+                prior_uncertain=sum(d["state"] in ("unknown","sending","failed","blocked")
+                                    for d in deliveries),
+                delivery_states={d["contact_id"]:d["state"] for d in deliveries},
+            )
+    return {"accounts":accounts,"contacts":contacts,**prefill}
+
+
+@app.get("/compose")
+async def compose(request: Request, from_campaign: str = ""):
+    user=principal(request)
+    context=await composer_context(user["admin_id"],source_id=from_campaign)
+    return render(request,"compose.html",title="Reuse broadcast" if from_campaign else "New broadcast",**context)
 
 
 @app.post("/compose/preview")
@@ -534,15 +572,59 @@ async def prepare_broadcast(request: Request):
     account_id=str(form.get("account_id",""))
     message=str(form.get("message","")).strip()
     supplied=form.getlist("contacts")
+    source_id=str(form.get("reuse_source_id","")).strip()
     try:
         ids=[int(str(x)) for x in supplied]
         limit=core.recipient_limit()
         with core.database() as db:
+            if source_id and not db.execute(
+                "SELECT 1 FROM campaigns WHERE id=? AND owner_id=?",
+                (source_id,user["admin_id"]),
+            ).fetchone():
+                raise HTTPException(404, "Original broadcast not found")
             cid=core.create_campaign(db,account_id,message,ids,limit,user["admin_id"])
+            if source_id:
+                db.execute(
+                    "INSERT INTO campaign_reuses(source_campaign_id,new_campaign_id,created_at) "
+                    "VALUES (?,?,?)", (source_id,cid,core.now()),
+                )
             db.commit()
     except (TypeError,ValueError) as exc:
-        return redirect("/compose",str(exc))
-    return redirect(f"/campaigns/{cid}", "Review the exact message and recipients before sending.")
+        return redirect(
+            "/compose" + ("?from_campaign="+quote(source_id) if source_id else ""),
+            str(exc),
+        )
+    return redirect(f"/campaigns/{cid}", "New draft ready. Verify recipients before sending.")
+
+
+@app.get("/campaigns/{campaign_id}/edit")
+async def edit_campaign_page(request: Request, campaign_id: str):
+    user=principal(request)
+    context=await composer_context(user["admin_id"],draft_id=campaign_id)
+    return render(request,"compose.html",title="Edit draft",**context)
+
+
+@app.post("/campaigns/{campaign_id}/edit")
+async def edit_campaign_action(request: Request, campaign_id: str):
+    user=principal(request)
+    form=await request.form(max_fields=20_000)
+    authorize(request,str(form.get("csrf","")))
+    account_id=str(form.get("account_id",""))
+    message=str(form.get("message","")).strip()
+    try:
+        ids=[int(str(x)) for x in form.getlist("contacts")]
+        with core.database() as db:
+            source,_=core.campaign_summary(db,campaign_id,user["admin_id"])
+            if source is None:
+                raise HTTPException(404,"Draft not found")
+            core.update_campaign_draft(
+                db,campaign_id,user["admin_id"],account_id,message,ids,
+                core.recipient_limit(),
+            )
+            db.commit()
+    except (ValueError,TypeError) as exc:
+        return redirect(f"/campaigns/{campaign_id}/edit",str(exc))
+    return redirect(f"/campaigns/{campaign_id}","Draft updated. Review before sending.")
 
 
 @app.get("/campaigns")
@@ -572,12 +654,19 @@ def campaign_page(request: Request, campaign_id: str):
             "SELECT retry_campaign_id FROM campaign_retries WHERE source_campaign_id=?",
             (campaign_id,),
         ).fetchone() if campaign else None)
+        reused_from=(db.execute(
+            "SELECT r.source_campaign_id FROM campaign_reuses r "
+            "JOIN campaigns c ON c.id=r.source_campaign_id AND c.owner_id=? "
+            "WHERE r.new_campaign_id=?",
+            (user["admin_id"],campaign_id),
+        ).fetchone() if campaign else None)
     if campaign is None:raise HTTPException(404,"Campaign not found")
     counts={}
     for d in deliveries:counts[d["state"]]=counts.get(d["state"],0)+1
     return render(request,"campaign_detail.html",title="Broadcast details",
                   campaign=campaign,deliveries=deliveries,counts=counts,
-                  retryable=retryable,retry_id=retry_row["retry_campaign_id"] if retry_row else None)
+                  retryable=retryable,retry_id=retry_row["retry_campaign_id"] if retry_row else None,
+                  reused_from=reused_from["source_campaign_id"] if reused_from else None)
 
 
 @app.post("/campaigns/{campaign_id}/retry")

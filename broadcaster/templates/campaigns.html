@@ -7,6 +7,8 @@
 <td><a href="/campaigns/{{ c['id'] }}" class="table-primary">{{ c['label'] }}</a></td><td>{{ c['created_at']|moment }}</td><td>{{ c['total'] }}</td><td>{{ c['sent'] }}</td><td><span class="status status-{{ c['state'] }}">{{ c['state'] }}</span></td><td>
   <div class="history-actions">
     <a class="text-link" href="/campaigns/{{ c['id'] }}">Details →</a>
+    {% if c['state']=='draft' %}<a class="text-link" href="/campaigns/{{ c['id'] }}/edit">Edit draft</a>{% endif %}
+    <a class="text-link" href="/compose?from_campaign={{ c['id'] }}">Reuse and edit</a>
     {% if c['state']=='interrupted' %}
       {% if c['retry_id'] %}
         <a class="text-link" href="/campaigns/{{ c['retry_id'] }}">View retry</a>

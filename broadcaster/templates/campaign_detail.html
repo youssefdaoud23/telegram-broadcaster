@@ -3,6 +3,13 @@
 <div class="page-heading"><div><a href="/campaigns" class="back-link">← Back to history</a><h1>Broadcast details</h1><p class="subtle">{{ campaign['created_at']|moment }} · {{ campaign['account_label'] }} {{ campaign['account_username'] }}</p></div><span class="status status-{{ campaign['state'] }}">{{ campaign['state'] }}</span></div>
 <div class="two-cols detail-layout">
 <section class="panel"><div class="panel-head"><h2>Message</h2></div><div class="message-preview">{{ campaign['message'] }}</div>
+{% if reused_from %}
+<p class="subtle">New broadcast based on <a href="/campaigns/{{ reused_from }}" class="text-link">original campaign</a>. Its history was preserved.</p>
+{% endif %}
+<div class="detail-actions">
+  {% if campaign['state']=='draft' %}<a href="/campaigns/{{ campaign['id'] }}/edit" class="btn btn-secondary">Edit this draft</a>{% endif %}
+  <a href="/compose?from_campaign={{ campaign['id'] }}" class="btn btn-outline">Reuse and edit as a new broadcast</a>
+</div>
 <div class="divider-line"></div>
 <div class="detail-stats"><div><strong>{{ campaign['total'] }}</strong><small>Recipients</small></div><div><strong>{{ counts.get('sent',0) }}</strong><small>Sent</small></div><div><strong>{{ counts.get('failed',0) + counts.get('blocked',0) }}</strong><small>Failed / blocked</small></div></div>
 {% if campaign['state']=='draft' %}

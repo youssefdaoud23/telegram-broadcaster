@@ -20,6 +20,22 @@ document.addEventListener("DOMContentLoaded",()=>{
     if(selectAll) selectAll.checked=checkboxes.length>0&&checkboxes.every(x=>x.checked);
   };
   for(const c of checkboxes)c.addEventListener("change",refreshRecipients);
+  for(const button of document.querySelectorAll("[data-reuse-preset]")){
+    button.addEventListener("click",()=>{
+      const preset=button.getAttribute("data-reuse-preset");
+      for(const checkbox of checkboxes){
+        const previous=checkbox.getAttribute("data-previous-state")||"";
+        checkbox.checked=(
+          preset==="all" ? !!previous :
+          preset==="none" ? false :
+          preset==="failed" ? (previous==="failed"||previous==="blocked") :
+          preset==="unknown" ? (previous==="unknown"||previous==="sending") :
+          previous===preset
+        );
+      }
+      refreshRecipients();
+    });
+  }
   if(selectAll)selectAll.addEventListener("change",()=>{
     for(const c of checkboxes)c.checked=selectAll.checked;
     refreshRecipients();

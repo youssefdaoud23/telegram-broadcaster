@@ -126,6 +126,12 @@ CREATE TABLE IF NOT EXISTS campaign_retries (
  retry_campaign_id TEXT NOT NULL UNIQUE REFERENCES campaigns(id),
  created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS campaign_reuses (
+ source_campaign_id TEXT NOT NULL REFERENCES campaigns(id),
+ new_campaign_id TEXT NOT NULL UNIQUE REFERENCES campaigns(id),
+ created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_campaign_reuses_source ON campaign_reuses(source_campaign_id);
 """
 
 
@@ -400,34 +406,83 @@ def insert_contact(db: sqlite3.Connection, data: dict[str,str], owner_id: int, *
     return int(cursor.lastrowid)
 
 
-def create_campaign(db: sqlite3.Connection, account_id: str, message: str, contact_ids: list[int], limit: int | None, owner_id: int) -> str:
+def campaign_targets(db: sqlite3.Connection, account_id: str, message: str,
+                     contact_ids: list[int], limit: int | None,
+                     owner_id: int) -> list[sqlite3.Row]:
+    """Validate an editable broadcast against current sender and contact permissions."""
     if len(message.strip()) < 1 or len(message) > 4096:
-        raise ValueError("Message must contain 1–4096 characters")
+        raise ValueError("Message must contain 1-4096 characters")
     if not contact_ids:
         raise ValueError("Select at least one opted-in recipient")
     if limit is not None and len(contact_ids) > limit:
         raise ValueError(f"Select no more than {limit} opted-in recipients")
     if len(contact_ids) != len(set(contact_ids)):
         raise ValueError("Recipients cannot be duplicated")
-    account = db.execute("SELECT * FROM accounts WHERE id=? AND state='connected' AND owner_id=?", (account_id,owner_id)).fetchone()
-    if not account:
-        raise ValueError("Please connect a Telegram sender first")
-    eligible=[]
+    sender = db.execute(
+        "SELECT id FROM accounts WHERE id=? AND state='connected' AND owner_id=?",
+        (account_id, owner_id),
+    ).fetchone()
+    if not sender:
+        raise ValueError("Choose a connected Telegram sender from your own workspace")
+    targets=[]
     for cid in contact_ids:
-        c=db.execute("SELECT * FROM contacts WHERE id=? AND owner_id=? AND archived=0 AND enabled=1 AND consent=1", (cid,owner_id)).fetchone()
-        if not c:
-            raise ValueError("A selected contact is disabled or has not opted in")
-        eligible.append(c)
+        contact=db.execute(
+            "SELECT * FROM contacts WHERE id=? AND owner_id=? "
+            "AND archived=0 AND enabled=1 AND consent=1",
+            (cid, owner_id),
+        ).fetchone()
+        if contact is None:
+            raise ValueError("A selected contact is disabled, missing, or has not opted in")
+        targets.append(contact)
+    return targets
+
+
+def _insert_campaign_deliveries(db: sqlite3.Connection, campaign_id: str,
+                                targets: list[sqlite3.Row]) -> None:
+    for c in targets:
+        db.execute(
+            "INSERT INTO deliveries(campaign_id,contact_id,name,destination,state,updated_at) "
+            "VALUES (?,?,?,?, 'pending',?)",
+            (campaign_id, c["id"], c["name"], destination(c), now()),
+        )
+
+
+def create_campaign(db: sqlite3.Connection, account_id: str, message: str,
+                    contact_ids: list[int], limit: int | None, owner_id: int) -> str:
+    targets = campaign_targets(db, account_id, message, contact_ids, limit, owner_id)
     campaign_id=secrets.token_urlsafe(18)
     db.execute(
-        "INSERT INTO campaigns(id,account_id,message,state,created_at,total,owner_id) VALUES (?,?,?,'draft',?,?,?)",
-        (campaign_id, account_id, message, now(), len(eligible), owner_id),
+        "INSERT INTO campaigns(id,account_id,message,state,created_at,total,owner_id) "
+        "VALUES (?,?,?,'draft',?,?,?)",
+        (campaign_id, account_id, message, now(), len(targets), owner_id),
     )
-    for c in eligible:
-        db.execute("""INSERT INTO deliveries(campaign_id,contact_id,name,destination,state,updated_at)
-                      VALUES (?,?,?,?, 'pending',?)""",
-                   (campaign_id,c["id"],c["name"],destination(c),now()))
+    _insert_campaign_deliveries(db, campaign_id, targets)
     return campaign_id
+
+
+def update_campaign_draft(db: sqlite3.Connection, campaign_id: str, owner_id: int,
+                          account_id: str, message: str, contact_ids: list[int],
+                          limit: int | None) -> None:
+    """Atomically modify a private draft, never a submitted or historic campaign."""
+    db.execute("BEGIN IMMEDIATE")
+    draft = db.execute(
+        "SELECT state FROM campaigns WHERE id=? AND owner_id=?",
+        (campaign_id, owner_id),
+    ).fetchone()
+    if draft is None:
+        raise ValueError("Draft not found")
+    if draft["state"] != "draft":
+        raise ValueError("This broadcast has already been submitted and is read-only")
+    targets = campaign_targets(db, account_id, message, contact_ids, limit, owner_id)
+    changed = db.execute(
+        "UPDATE campaigns SET account_id=?,message=?,total=? "
+        "WHERE id=? AND owner_id=? AND state='draft'",
+        (account_id, message, len(targets), campaign_id, owner_id),
+    ).rowcount
+    if changed != 1:
+        raise ValueError("Draft changed while you were editing. Refresh and try again.")
+    db.execute("DELETE FROM deliveries WHERE campaign_id=?", (campaign_id,))
+    _insert_campaign_deliveries(db, campaign_id, targets)
 
 
 def campaign_summary(db: sqlite3.Connection, campaign_id: str, owner_id: int) -> tuple[sqlite3.Row | None,list[sqlite3.Row]]:

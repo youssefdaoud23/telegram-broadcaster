@@ -443,3 +443,13 @@ label { color: var(--tg-text); }
 /* Expired/revoked Telegram authentication state. */
 .status-disconnected { background: #ffe9e7; color: #bb554d; }
 :root[data-theme="dark"] .status-disconnected { background: #4e292d; color: #ffaaa4; }
+
+/* Broadcast reuse and editable draft actions. */
+.detail-actions {display:flex;flex-wrap:wrap;gap:10px;margin:13px 0;}
+.detail-actions .btn {white-space:normal;text-align:center;}
+
+
+/* Safe manual selection of previous delivery outcomes during reuse. */
+.reuse-presets {display:flex; flex-direction:column; gap:9px; margin:8px 8px 13px;}
+.reuse-presets .history-actions {gap:6px;}
+.reuse-presets button {min-height:29px; font-size:11px; padding:5px 10px; white-space:normal;}

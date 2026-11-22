@@ -105,3 +105,31 @@ or the individual Check session action. Transient network failures leave
 connection state unchanged. The send worker also marks confirmed expired
 sessions disconnected. Status checks never send Telegram messages or
 automatically reconnect sessions. All queries respect user-owned accounts.
+
+## Independent host location and relocation
+
+Target production path: `/opt/telegram-broadcaster`, not under n8n.
+Before the operator completes the move, the live original location is
+`/root/n8n/telegram-broadcaster`. The repository includes the one-time
+`scripts/migrate_to_opt.sh` guarded mover, run as host root. Compose
+`./data:/data` and `env_file: .env` must move together. The original and
+new directory have the same basename so Compose project identity is unchanged.
+The move requires Docker socket/host filesystem rights, which Joe MCP's
+current scoped workspace does not grant; do not claim deployment or restart
+without verifying it. Original private .env and UID 10001 sessions are preserved
+by atomic directory move, SQLite online backup, health and count checks.
+No interaction with n8n's own compose project or legacy bridge.
+
+## Historical broadcast reuse and editing
+
+GET `/compose?from_campaign=id` opens a prefilled, non-sending composer
+using the original message, connected sender, and original recipient list
+filtered to the current workspace's enabled, opted-in, non-archived contacts.
+HTML shows prior delivery statuses and selection presets by outcome, including
+sent/unknown (never silently retried). POST `/compose/preview` creates a
+new draft with independent delivery rows and a `campaign_reuses` source link,
+with owner ID checks and an explicit review step. GET/POST
+`/campaigns/{id}/edit` modifies only an owner's unsent draft with
+`BEGIN IMMEDIATE`, server-side validation, and atomic replacement of
+recipient delivery rows. Existing submitted campaigns are immutable.
+Continue to keep interrupted-campaign Try again limited to pending only.

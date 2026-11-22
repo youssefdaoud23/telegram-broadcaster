@@ -9,7 +9,7 @@ Self-hosted personal Telegram messaging dashboard with a beautiful browser UI, S
 - Guided Telegram API application setup at https://my.telegram.org/apps; sign in using a Telegram code and optional 2FA password inside the authenticated website.
 - Multiple personal Telegram senders with separate local Telethon sessions. API hashes and phone numbers are encrypted in SQLite; login codes and 2FA passwords are not stored.
 - Separate direct messages, not a group or Telegram bot. Review exact recipients before clicking Send.
-- Explicit opt-in, sender identity checks, a per-campaign limit, a delayed delivery loop, flood-wait protection, and no automatic retry of interrupted broadcasts.
+- Explicit opt-in, sender identity checks, an optional per-campaign limit, a delayed delivery loop, flood-wait protection, and no automatic retry of interrupted broadcasts.
 
 **The GitHub repository is public. NEVER commit .env, Telegram session files, customer contacts, database files, API hashes, phone numbers, credentials or delivery logs.**
 
@@ -29,6 +29,55 @@ Send**; all original opt-in and delivery restrictions are unchanged.
 
 FastAPI · Telethon 1.x · Jinja2 · Python 3.12 · SQLite · vanilla JavaScript/CSS · Docker Compose.
 
+## Installation directory and one-time move from n8n
+
+The standalone application belongs at **`/opt/telegram-broadcaster`**.
+It uses a single Docker Compose project and a persistent local `./data` bind
+mount. Telegram sessions, SQLite, the private `.env`, and Git checkout must
+move **together**. Moving only the code would create an empty database and
+separate Telegram sessions. The public hostname, port 8789, and Cloudflare
+tunnel route do not need to change.
+
+**On an existing installation** that still runs from
+`/root/n8n/telegram-broadcaster`, update its source first and run the
+reviewable one-time migration script as root via SSH:
+
+~~~bash
+cd /root/n8n/telegram-broadcaster
+git pull --ff-only origin main
+bash scripts/migrate_to_opt.sh
+~~~
+
+The migration script requires that the original broadcaster is running,
+no campaigns are queued or sending, Docker Compose is available, and
+`/opt/telegram-broadcaster` does not already exist. It verifies a fresh
+timestamped SQLite online backup (integrity check), checks account/contact/
+campaign/delivery counts, builds the image, stops **only** the broadcaster,
+atomically moves the project on the same filesystem, brings the service up
+under the **same Compose project name**, and checks HTTP health and all
+preserved record counts. On failures after shutdown, it attempts recovery
+under the original directory without touching n8n.
+
+Do not delete the source directory manually, create an empty `data/`
+volume at the new location, copy over an existing destination, or
+run a bare `docker compose down -v` during the move. The old directory
+is removed automatically by the atomic move after a verified backup.
+If the script reports a problem, inspect its output before retrying.
+
+The migration requires host-root filesystem and Docker Compose access.
+Joe MCP's current workspace permission does **not** grant access to the
+running original Docker project or the host `/opt` directory. The
+migration has to run in an authorized host terminal until those
+permissions are granted; repository updates alone do not move the service.
+
+After a successful move, use:
+
+~~~bash
+cd /opt/telegram-broadcaster
+docker compose up -d --build
+docker compose ps
+~~~
+
 ## Deploy on your own server (independent of the existing n8n setup)
 
 The website uses the **same host-port publishing approach as n8n**: Docker listens on port 8789 of the host. Configure Cloudflare Tunnel with your server's public IP and port; do not share secrets or session files. Protect the website and, ideally, restrict direct access to the origin port.
@@ -36,7 +85,8 @@ The website uses the **same host-port publishing approach as n8n**: Docker liste
 1. Clone the canonical repository:
 
    ~~~bash
-   cd /root/n8n
+   sudo mkdir -p /opt
+   cd /opt
    git clone https://github.com/youssefdaoud23/telegram-broadcaster.git
    cd telegram-broadcaster
    ~~~
@@ -142,7 +192,7 @@ consistent online backup method**. With the broadcaster running and with no
 active sends, run from the server:
 
 ~~~bash
-cd /root/n8n/telegram-broadcaster
+cd /opt/telegram-broadcaster
 docker compose exec -T broadcaster python - <<'PY'
 import os
 import sqlite3
@@ -189,7 +239,7 @@ the very first admin becomes the installation owner, subsequent CLI accounts
 are ordinary private users. Run `create-admin` only once for each username. If `admin` already exists, **do not create another administrator or delete the SQLite database**. Sign in with the existing credentials or reset its password in the trusted server terminal:
 
 ~~~bash
-cd /root/n8n/telegram-broadcaster
+cd /opt/telegram-broadcaster
 docker compose build broadcaster
 docker compose run --rm -it broadcaster python -m broadcaster.cli reset-admin-password
 ~~~
@@ -247,6 +297,39 @@ Session checks happen on webpage visits and when manually requested - this
 is not a permanent background monitor. A session can become stale between
 visits. Telegram's own rate limits and remote connectivity still apply.
 
+## Reuse old broadcasts and edit drafts
+
+**History** and **Broadcast details** provide **Reuse and edit** for any
+previous campaign, including finished, failed, paused, interrupted, and
+draft campaigns. This opens a fresh composer with the original message,
+connected sender (if still authorized), and currently eligible, opted-in
+original recipients preselected. You can change the message, choose another
+sender, select or unselect recipients, and create a **new draft for review**.
+The old campaign and all of its delivery results are never modified.
+
+To help avoid accidental duplicates, the composer shows how many were
+already sent or had uncertain/failed outcomes and offers quick recipient
+selections: **All original**, **Not yet attempted**, **Failed/blocked**,
+**Previously sent**, **Unknown**, and **Clear**. These are manual selection
+shortcuts only; they never send messages. Recipients who are disabled,
+archived, removed, or no longer opted in cannot be selected. Review unknown
+statuses and the Telegram conversation before intentionally resending.
+
+A new broadcast made from an older one stores a source-to-new draft link
+in `campaign_reuses`. Open the new draft's detail page to see its source.
+The explicit **Send** button is the only action that queues delivery.
+
+An unsent `draft` now also has **Edit this draft**. You can change its
+sender, message, and recipients in place, then return to review. Once a
+broadcast has been submitted for sending, it becomes read-only and can
+only be reused as a **separate** campaign. This prevents modifying history
+after messages may already have gone out.
+
+The older **Try again** button on interrupted broadcasts remains
+intentionally narrower: it creates an idempotent new draft from only
+safely pending recipients. Choose **Reuse and edit** when you explicitly
+want to contact previously sent or failed recipients again.
+
 ## Interrupted broadcasts: Try again without duplicate sends
 
 Open **History**. An interrupted broadcast displays **Try again** when at
@@ -283,7 +366,7 @@ Changing an existing server configuration only takes effect after recreating
 the broadcaster container (when no broadcasts are actively sending):
 
 ~~~bash
-cd /root/n8n/telegram-broadcaster
+cd /opt/telegram-broadcaster
 docker compose up -d --no-deps --force-recreate broadcaster
 ~~~
 
@@ -305,7 +388,7 @@ of retrying them automatically.
 Always use GitHub as the source of truth. Develop on a feature branch, run tests, merge into main, then update the separate server checkout:
 
 ~~~bash
-cd /root/n8n/telegram-broadcaster
+cd /opt/telegram-broadcaster
 git status --short
 git fetch origin
 git pull --ff-only origin main
@@ -347,7 +430,7 @@ For the existing tunnel's published route:
 After updating GitHub, pull the latest commit on the server and recreate only this application:
 
 ~~~bash
-cd /root/n8n/telegram-broadcaster
+cd /opt/telegram-broadcaster
 git pull --ff-only origin main
 docker compose up -d --no-deps --force-recreate broadcaster
 curl -fsS http://127.0.0.1:8789/health

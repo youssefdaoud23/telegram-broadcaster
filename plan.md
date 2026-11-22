@@ -104,3 +104,25 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [ ] Rebuild only broadcaster when no campaign is actively running, then
       confirm a previously revoked account becomes Disconnected in UI.
 - [ ] Confirm reconnect code request can authenticate a new Telegram session.
+
+## Independent /opt deployment and broadcast management (2026-11-22)
+
+- [x] Verify source compose uses relative .env and persistent ./data paths.
+- [x] Verify current Joe MCP scope lacks host /opt and production Docker
+      project permissions. Avoid a partial move of live data.
+- [x] Create guarded host-root scripts/migrate_to_opt.sh with no-active-send
+      check, timestamped SQLite online backup + integrity check, immutable
+      data-directory move, minimal broadcaster-only restart, health/count checks
+      and attempted rollback on failure.
+- [x] Add Reuse and edit actions for history and campaign details, including
+      finished, interrupted and failed broadcasts.
+- [x] Add outcome-based recipient-selection shortcuts and duplicate-send warning.
+- [x] Add source-to-new-draft audit links and owner-isolated queries.
+- [x] Add in-place editing for unsent drafts only, with atomic validation.
+- [x] Preserve manual preview/Send and narrower pending-only Try again.
+- [ ] Run migration script on authorized host terminal, with original container
+      running, no active send, and empty /opt target. Verify PASS output.
+- [ ] Confirm public site after move, Telegram account status, user workspaces
+      and all history (without sending actual messages).
+- [ ] Grant Joe MCP /opt workspace access separately if future maintenance
+      through Joe MCP is desired.
