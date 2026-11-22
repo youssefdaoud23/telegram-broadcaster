@@ -97,13 +97,21 @@ def import_contact_record(
                     "Contact restored by explicit import; prior opt-in reset",
                     "archived_contact_reimport", core.now(),
                 ))
-        # Fill only a missing Telegram numeric ID matched using another
-        # verified identifier; preserve prior names, notes and other fields.
-        if data["user_id"] and not existing["user_id"]:
+        # An established Telegram ID, username, or phone matched this row.
+        # Backfill ONLY missing identifiers supplied by the new scan/CSV;
+        # never overwrite previously recorded identifiers or personal notes.
+        # Above, the owner-scoped match query rejects identifiers pointing
+        # to different contacts, and conflicts on this record are rejected.
+        missing_fields = {
+            field: data[field] for field in ("user_id", "username", "phone")
+            if data[field] and not existing[field]
+        }
+        if missing_fields:
+            assignments = ", ".join(f"{field}=?" for field in missing_fields)
             db.execute(
-                "UPDATE contacts SET user_id=?,updated_at=? "
-                "WHERE id=? AND owner_id=? AND user_id=''",
-                (data["user_id"], core.now(), contact_id, owner_id),
+                f"UPDATE contacts SET {assignments},updated_at=? "
+                "WHERE id=? AND owner_id=?",
+                (*missing_fields.values(), core.now(), contact_id, owner_id),
             )
     else:
         contact_id = core.insert_contact(

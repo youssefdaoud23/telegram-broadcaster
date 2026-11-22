@@ -671,3 +671,20 @@ label { color: var(--tg-text); }
   .group-member-row{flex-wrap:wrap}
   .group-member-row .contact-status-switch{margin-left:34px}
 }
+
+/* A contact group is a filtered member view, not a workspace-wide checklist. */
+.group-add-disclosure{margin-bottom:18px;padding:13px 15px;border:1px solid var(--tg-outline,#dae3ee);border-radius:13px;background:var(--tg-surface-alt,#f5f8fc)}
+.group-add-disclosure>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;font-size:13px;font-weight:750}
+.group-add-disclosure>summary small{font-weight:450;color:var(--tg-muted,#78869a);font-size:11px}
+.group-add-disclosure[open]>summary{margin-bottom:15px}
+.group-picker-form .group-member-toolbar{margin:9px 0 12px}
+.group-picker-form .group-member-scroll{max-height:480px}
+.group-picker-form .group-picker-scroll .group-member-row{cursor:default}
+.group-picker-form .group-picker-scroll label.group-member-row{cursor:pointer}
+.group-picker-form .form-actions{gap:12px;align-items:center;margin-top:13px}
+.group-picker-form .form-actions .group-picker-selected-count{margin-right:auto}
+.group-picker-form .form-actions button:disabled{opacity:.45;cursor:not-allowed}
+.group-picker-form .group-picker-no-results{margin:15px 0}
+.group-picker-form .group-picker-status{font-size:11px;font-weight:650;color:var(--tg-muted,#718198)}
+.group-picker-form .group-member-row[hidden]{display:none}
+@media(max-width:690px){.group-add-disclosure>summary{flex-wrap:wrap}}

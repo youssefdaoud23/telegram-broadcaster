@@ -85,7 +85,13 @@ private promotional messages. The app never sends or drafts messages as
 part of importing.
 
 **Missing username or phone does not always mean an unusable member.**
-A Telegram numeric user ID can identify them if the same sending account's
+If an earlier import stored a contact without a phone number or username,
+re-importing a scan or CSV containing that verified identifier now fills the
+**missing** field on a securely matched existing contact. An existing phone
+number or username is never overwritten, and conflicting identifiers are
+skipped. A phone that Telegram does not expose cannot be recovered by import;
+the CSV export likewise leaves it empty. A Telegram numeric user ID can
+identify them if the same sending account's
 Telethon session has encountered the member and retained their entity
 access hash. Use the connected account that scanned the group when sending
 to ID-only recipients. Telegram can still deny access or restrict messages,
@@ -95,8 +101,11 @@ is not a phone number and cannot be used to reveal private phone numbers.
 To reorganize existing contacts without individually editing each one,
 open **Contacts**, tick the people you need, select a group and use
 **Add selected** or **Remove selected**. This affects only that group's
-membership, not contacts' other groups or consent. The group editor also
-supports selecting all shown contacts. A broadcast selects only opted-in,
+membership, not contacts' other groups or consent. Opening a particular
+group now shows **only that group's members**, with a separate searchable
+**Add contacts** picker for contacts outside the group. Removing selected
+members affects only this group and never deletes their contact records.
+There is no group-wide membership replacement when using these actions. A broadcast selects only opted-in,
 enabled recipients and requires the usual explicit preview and Send action.
 
 Exported group CSV files now have a fourth column, **Telegram User ID**.

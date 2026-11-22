@@ -1,73 +1,122 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-heading">
-  <div><a class="back-link" href="/contacts/groups">← All contact groups</a>
+  <div>
+    <a class="back-link" href="/contacts/groups">← All contact groups</a>
     <span class="eyebrow accent">CONTACT GROUP</span>
     <h1>{{ group['name'] }}</h1>
-    <p class="subtle">This editor lists all contacts in your workspace, not just this group. Only checked contacts are members. Saving replaces this group's membership. Use the Active switches to control availability separately.</p></div>
+    <p class="subtle">Only members of this group are shown below. Add or remove people without changing their other groups, contact records, or Active settings.</p>
+  </div>
   <a class="btn btn-primary" href="/compose?group_id={{ group['id'] }}">Broadcast to this group</a>
 </div>
 <div class="contacts-grid">
   <section class="panel">
-    <div class="panel-head"><h2>Group members <span class="count-pill" id="group-member-count">{{ members|length }} selected</span></h2></div>
-    {% if not members %}<p class="subtle">This group currently has no assigned contacts. Check the contacts to add, then select Save group members.</p>{% endif %}
-    <form action="/contacts/groups/{{ group['id'] }}/members" method="post">
+    <div class="panel-head">
+      <div><h2>Group members <span class="count-pill" id="group-member-count">{{ contacts|length }} members</span></h2>
+        <p class="subtle">Manage the contacts assigned to this group.</p>
+      </div>
+    </div>
+    <details class="group-add-disclosure" id="group-add-contacts">
+      <summary><span>+ Add contacts</span><small>{{ available_contacts|length }} available outside this group</small></summary>
+      <form action="/contacts/groups/{{ group['id'] }}/members/add" method="post"
+            class="group-picker-form" data-group-picker="add">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        {% if available_contacts %}
+        <div class="group-member-toolbar">
+          <label class="checkline"><input type="checkbox" class="group-picker-select-all" aria-label="Select all matching available contacts"> Select visible</label>
+          <input type="search" class="group-picker-search" placeholder="Find a contact to add by name, username, phone, or ID" aria-label="Search available contacts" autocomplete="off">
+        </div>
+        <div class="group-member-scroll group-picker-scroll">
+          {% for contact in available_contacts %}
+          <label class="group-member-row" data-group-member-search="{{ (contact['name'] ~ ' ' ~ contact['username'] ~ ' ' ~ contact['phone'] ~ ' ' ~ contact['user_id'] ~ ' ' ~ contact['notes'])|lower }}">
+            <input type="checkbox" class="group-picker-checkbox" name="contacts" value="{{ contact['id'] }}" aria-label="Add {{ contact['name'] }}">
+            <span class="contact-avatar">{{ contact['name'][:1]|upper }}</span>
+            <span class="group-member-contact">
+              <strong>{{ contact['name'] }}</strong>
+              <small>Username: {{ ('@' ~ contact['username'].lstrip('@')) if contact['username'] else 'Not available' }}</small>
+              <small>Phone: <span class="contact-phone">{{ contact['phone'] or 'Not available' }}</span></small>
+              {% if contact['user_id'] %}<small>Telegram ID: {{ contact['user_id'] }}</small>{% endif %}
+            </span>
+            <span class="group-picker-status">{{ 'Active' if contact['enabled'] else 'Inactive' }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="subtle group-picker-no-results" hidden>No matching available contacts.</p>
+        <div class="form-actions">
+          <span class="subtle group-picker-selected-count" aria-live="polite">0 selected</span>
+          <button type="submit" class="btn btn-primary group-picker-submit" disabled>Add selected to group</button>
+        </div>
+        {% else %}
+        <div class="empty-state"><p>Everyone in this workspace is already in this group. <a href="/contacts">Add another contact</a>.</p></div>
+        {% endif %}
+      </form>
+    </details>
+    <form action="/contacts/groups/{{ group['id'] }}/members/remove" method="post"
+          id="group-remove-form" class="group-picker-form" data-group-picker="remove">
       <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if contacts %}
       <div class="group-member-toolbar">
-        <label class="checkline"><input id="group-member-select-all" type="checkbox"> Select all shown</label>
-        <input id="group-member-search" type="search" placeholder="Search names, usernames, phones, Telegram IDs..." aria-label="Filter contacts">
+        <label class="checkline"><input type="checkbox" class="group-picker-select-all" aria-label="Select all matching group members"> Select visible</label>
+        <input type="search" class="group-picker-search" placeholder="Search this group's members..." aria-label="Search members of this group" autocomplete="off">
       </div>
-      <div class="group-member-scroll">
-      {% for contact in contacts %}
-      <div class="group-member-row" data-group-member-search="{{ (contact['name'] ~ ' ' ~ contact['username'] ~ ' ' ~ contact['phone'] ~ ' ' ~ contact['user_id'] ~ ' ' ~ contact['notes'])|lower }}">
-        <input class="group-member-checkbox" type="checkbox" name="contacts" value="{{ contact['id'] }}"
-          aria-label="Include {{ contact['name'] }} in this group"
-          {% if contact['id'] in members %}checked{% endif %}>
-        <span class="contact-avatar">{{ contact['name'][:1]|upper }}</span>
-        <span class="group-member-contact">
-          <strong>{{ contact['name'] }}</strong>
-          <small>{% if contact['username'] %}Username: @{{ contact['username'].lstrip('@') }}{% else %}Username: Not available{% endif %}</small>
-          <small>Phone: <span class="contact-phone">{{ contact['phone'] or 'Not available' }}</span></small>
-          {% if contact['user_id'] %}<small>Telegram ID: {{ contact['user_id'] }}</small>{% endif %}
-        </span>
-        <button type="submit" form="group-active-form"
-                formaction="/contacts/{{ contact['id'] }}/status"
-                name="action" value="{{ 'deactivate' if contact['enabled'] else 'activate' }}"
-                class="contact-status-switch {{ 'is-active' if contact['enabled'] else 'is-inactive' }}"
-                aria-label="{{ 'Deactivate' if contact['enabled'] else 'Activate' }} {{ contact['name'] }}">
-          <span class="contact-status-switch-track" aria-hidden="true"><span></span></span>
-          <span>{{ 'Active' if contact['enabled'] else 'Inactive' }}</span>
-        </button>
+      <div class="group-member-scroll group-picker-scroll">
+        {% for contact in contacts %}
+        <div class="group-member-row" data-group-member-search="{{ (contact['name'] ~ ' ' ~ contact['username'] ~ ' ' ~ contact['phone'] ~ ' ' ~ contact['user_id'] ~ ' ' ~ contact['notes'])|lower }}">
+          <input type="checkbox" class="group-picker-checkbox" name="contacts" value="{{ contact['id'] }}" aria-label="Select {{ contact['name'] }} for removal from group">
+          <span class="contact-avatar">{{ contact['name'][:1]|upper }}</span>
+          <span class="group-member-contact">
+            <strong>{{ contact['name'] }}</strong>
+            <small>Username: {{ ('@' ~ contact['username'].lstrip('@')) if contact['username'] else 'Not available' }}</small>
+            <small>Phone: <span class="contact-phone">{{ contact['phone'] or 'Not available' }}</span></small>
+            {% if contact['user_id'] %}<small>Telegram ID: {{ contact['user_id'] }}</small>{% endif %}
+          </span>
+          <button type="submit" form="group-active-form"
+                  formaction="/contacts/{{ contact['id'] }}/status"
+                  name="action" value="{{ 'deactivate' if contact['enabled'] else 'activate' }}"
+                  class="contact-status-switch {{ 'is-active' if contact['enabled'] else 'is-inactive' }}"
+                  aria-label="{{ 'Deactivate' if contact['enabled'] else 'Activate' }} {{ contact['name'] }}">
+            <span class="contact-status-switch-track" aria-hidden="true"><span></span></span>
+            <span>{{ 'Active' if contact['enabled'] else 'Inactive' }}</span>
+          </button>
+        </div>
+        {% endfor %}
       </div>
-      {% else %}<div class="empty-state"><p>No contacts yet. <a href="/contacts">Add contacts</a> first.</p></div>
-      {% endfor %}
+      <p class="subtle group-picker-no-results" hidden>No matching group members.</p>
+      <div class="form-actions group-remove-actions">
+        <span class="subtle group-picker-selected-count" aria-live="polite">0 selected</span>
+        <button type="submit" class="btn btn-outline danger-text group-picker-submit" disabled
+                data-confirm="Remove only the selected people from this group? Their contact records and other groups will remain unchanged.">Remove selected from group</button>
       </div>
-      <div class="form-actions"><button class="btn btn-primary" type="submit">Save group members</button>
-        <a class="btn btn-outline" href="/contacts/groups">Cancel</a></div>
+      {% else %}
+      <div class="empty-state"><h3>No members in this group yet</h3>
+        <p>Use <strong>Add contacts</strong> above to assign people. Your contacts are not deleted when you remove them from a group.</p>
+      </div>
+      {% endif %}
     </form>
   </section>
   <div class="side-stack">
     <section class="panel">
       <div class="panel-head"><h2>Group Active status</h2></div>
-      <p class="subtle">Set the Active switch for every current member of this group. This also affects those contacts in other groups. It does not change messaging permission.</p>
+      <p class="subtle">Change the Active status of every current member of this group. This also affects shared contacts in other groups. Messaging permission remains separate.</p>
       <form id="group-active-form" method="post" action="/contacts/groups/{{ group['id'] }}/status" class="stack-form compact">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="group_id" value="{{ group['id'] }}">
         <button type="submit" class="btn btn-primary" name="action" value="activate"
-          data-confirm="Set all current members of this group Active? Their messaging permissions stay unchanged.">Set entire group Active</button>
+          data-confirm="Set all current group members Active? Their messaging permissions remain unchanged.">Set entire group Active</button>
         <button type="submit" class="btn btn-outline" name="action" value="deactivate"
-          data-confirm="Set all current members of this group Inactive? These contacts may belong to other groups.">Set entire group Inactive</button>
+          data-confirm="Set all current group members Inactive? This also affects contacts in other groups.">Set entire group Inactive</button>
       </form>
     </section>
-    <section class="panel"><div class="panel-head"><h2>Rename group</h2></div>
+    <section class="panel">
+      <div class="panel-head"><h2>Rename group</h2></div>
       <form action="/contacts/groups/{{ group['id'] }}/rename" method="post" class="stack-form">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label for="group-name">Group name</label><input id="group-name" name="name" maxlength="64"
-          value="{{ group['name'] }}" required>
+        <label for="group-name">Group name</label>
+        <input id="group-name" name="name" maxlength="64" value="{{ group['name'] }}" required>
         <button type="submit" class="btn btn-secondary">Rename group</button>
       </form>
     </section>
-    <div class="info-strip"><span>ⓘ</span><p>You can assign the same contact to several groups. Saving this membership list will not contact anyone. Active status determines whether a contact is available for selection; broadcasts also require valid messaging permission.</p></div>
+    <div class="info-strip"><span>ⓘ</span><p>Group membership and Active status are separate. Removing someone here does not delete their contact information, other group assignments, or broadcast history.</p></div>
   </div>
 </div>
 {% endblock %}

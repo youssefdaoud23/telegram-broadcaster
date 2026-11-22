@@ -157,7 +157,16 @@ class ContactGroupsTests(unittest.TestCase):
                            {"contacts":[str(a),str(b)]})
         self.assertEqual(response.status_code,303)
         page=self.http.get(f"/contacts/groups/{group}")
-        self.assertIn("2 selected",page.text)
+        self.assertIn("2 members",page.text)
+        self.assertIn("Add contacts",page.text)
+        self.assertIn('data-group-picker="remove"',page.text)
+        self.assertIn('data-group-picker="add"',page.text)
+        # The current-members list contains only assigned people.
+        group_list=page.text.split('data-group-picker="remove"',1)[1]
+        self.assertIn("Alice",group_list)
+        self.assertIn("Bob",group_list)
+        self.assertNotIn("Charlie",group_list)
+        self.assertNotIn("Save group members",page.text)
         self.assertIn("Group Active status",page.text)
         self.assertNotIn("Consent for the entire group",page.text)
         self.assertIn("Phone: ",page.text)
@@ -171,6 +180,75 @@ class ContactGroupsTests(unittest.TestCase):
         with core.database() as db:
             self.assertEqual({k for k,v in core.contact_group_map(db,self.owner_id).items() if group in v},
                              {a,c})
+
+    def test_group_page_shows_only_members_and_add_remove_are_additive(self):
+        first=self.add_group("Selected Audience")
+        second=self.add_group("Keep Existing")
+        member=self.add_contact("Member Alpha","@member_alph1",consent=True)
+        also=self.add_contact("Member Beta","@member_beta2",enabled=False)
+        unrelated=self.add_contact("Unrelated Gamma","@gamma_other3")
+        self.set_groups(member,[first,second])
+        self.set_groups(also,[first])
+        self.set_groups(unrelated,[second])
+        page=self.http.get(f"/contacts/groups/{first}")
+        self.assertIn("2 members",page.text)
+        self.assertIn('action="/contacts/groups/'+str(first)+'/members/add"',page.text)
+        self.assertIn('action="/contacts/groups/'+str(first)+'/members/remove"',page.text)
+        displayed=page.text.split('data-group-picker="remove"',1)[1]
+        self.assertIn("Member Alpha",displayed)
+        self.assertIn("Member Beta",displayed)
+        self.assertNotIn("Unrelated Gamma",displayed)
+        available=page.text.split('data-group-picker="add"',1)[1].split(
+            'data-group-picker="remove"',1
+        )[0]
+        self.assertIn("Unrelated Gamma",available)
+        self.assertNotIn("Member Alpha",available)
+        # Selectively adding another contact does not remove existing members.
+        added=self.post(f"/contacts/groups/{first}/members/add",
+                        {"contacts":[str(unrelated)]})
+        self.assertEqual(added.status_code,303)
+        with core.database() as db:
+            membership=core.contact_group_map(db,self.owner_id)
+            self.assertEqual(membership[member],{first,second})
+            self.assertEqual(membership[also],{first})
+            self.assertEqual(membership[unrelated],{first,second})
+        removed=self.post(f"/contacts/groups/{first}/members/remove",
+                          {"contacts":[str(also)]})
+        self.assertEqual(removed.status_code,303)
+        with core.database() as db:
+            membership=core.contact_group_map(db,self.owner_id)
+            self.assertEqual(membership[member],{first,second})
+            self.assertEqual(membership[unrelated],{first,second})
+            self.assertFalse(membership.get(also))
+            contact=db.execute(
+                "SELECT enabled,consent,archived FROM contacts WHERE id=?",(also,)
+            ).fetchone()
+            self.assertEqual(tuple(contact),(0,1,0))
+        updated=self.http.get(f"/contacts/groups/{first}")
+        self.assertIn("2 members",updated.text)
+        member_display=updated.text.split('data-group-picker="remove"',1)[1]
+        self.assertIn("Member Alpha",member_display)
+        self.assertIn("Unrelated Gamma",member_display)
+        self.assertNotIn("Member Beta",member_display)
+
+    def test_group_member_actions_validate_owner_csrf_and_no_empty_writes(self):
+        group=self.add_group("Secure Group")
+        cid=self.add_contact("Protected","@group_protect")
+        self.set_groups(cid,[group])
+        absent=self.post(f"/contacts/groups/{group}/members/remove",{})
+        self.assertEqual(absent.status_code,303)
+        wrong_csrf=self.http.post(
+            f"/contacts/groups/{group}/members/remove",
+            data={"csrf":"not-valid","contacts":[str(cid)]},
+            follow_redirects=False,
+        )
+        self.assertEqual(wrong_csrf.status_code,403)
+        bad_group=self.post(
+            f"/contacts/groups/{group+1000}/members/remove",{"contacts":[str(cid)]},
+        )
+        self.assertEqual(bad_group.status_code,303)
+        with core.database() as db:
+            self.assertEqual(core.contact_group_map(db,self.owner_id)[cid],{group})
 
     def test_compose_group_prefill_and_overlapping_group_union(self):
         left=self.add_group("Five contacts")

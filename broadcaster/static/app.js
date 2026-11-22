@@ -150,32 +150,61 @@ document.addEventListener("DOMContentLoaded",()=>{
   }
   if(contactSearch||contactGroup)filterContacts();
   else refreshBulkContacts();
-  const groupMemberChecks=[...document.querySelectorAll(".group-member-checkbox")];
-  const groupMemberSearch=document.getElementById("group-member-search");
-  const groupMemberCount=document.getElementById("group-member-count");
-  const groupMemberSelectAll=document.getElementById("group-member-select-all");
-  if(groupMemberChecks.length||groupMemberSearch){
-    const refreshGroupMembers=()=>{
-      const selected=groupMemberChecks.filter(c=>c.checked).length;
-      if(groupMemberCount)groupMemberCount.textContent=selected+" selected";
-      const shown=groupMemberChecks.filter(c=>!c.closest(".group-member-row").hidden);
-      if(groupMemberSelectAll)groupMemberSelectAll.checked=shown.length>0&&shown.every(c=>c.checked);
+  // A group page shows its actual members. Independent Add and Remove
+  // pickers use checkboxes for actions; never replace all group membership.
+  for(const form of document.querySelectorAll("form[data-group-picker]")){
+    const search=form.querySelector(".group-picker-search");
+    const selectAll=form.querySelector(".group-picker-select-all");
+    const count=form.querySelector(".group-picker-selected-count");
+    const submit=form.querySelector(".group-picker-submit");
+    const noResults=form.querySelector(".group-picker-no-results");
+    const indexed=[...form.querySelectorAll(".group-member-row")].map(row=>({
+      row,
+      search:((row.getAttribute("data-group-member-search")||"")+" "+row.textContent)
+        .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase(),
+      checkbox:row.querySelector(".group-picker-checkbox")
+    }));
+    const visible=()=>indexed.filter(item=>!item.row.hidden);
+    const refresh=()=>{
+      const shown=visible();
+      const selected=indexed.filter(item=>item.checkbox&&item.checkbox.checked);
+      const shownSelected=shown.filter(item=>item.checkbox&&item.checkbox.checked).length;
+      if(count)count.textContent=selected.length+" selected";
+      if(submit)submit.disabled=selected.length===0;
+      if(selectAll){
+        selectAll.checked=shown.length>0&&shownSelected===shown.length;
+        selectAll.indeterminate=shownSelected>0&&shownSelected<shown.length;
+      }
     };
-    for(const checkbox of groupMemberChecks)checkbox.addEventListener("change",refreshGroupMembers);
-    if(groupMemberSelectAll)groupMemberSelectAll.addEventListener("change",()=>{
-      for(const checkbox of groupMemberChecks){
-        if(!checkbox.closest(".group-member-row").hidden)checkbox.checked=groupMemberSelectAll.checked;
+    const filter=()=>{
+      const term=(search?.value||"").trim().normalize("NFD")
+        .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase();
+      const numbers=term.replace(/[^0-9]/g,"");
+      let found=0;
+      for(const item of indexed){
+        const match=!term||item.search.includes(term)||
+          (numbers.length>=3&&item.search.replace(/[^0-9]/g,"").includes(numbers));
+        item.row.hidden=!match;
+        if(match)found++;
+        else if(item.checkbox)item.checkbox.checked=false;
       }
-      refreshGroupMembers();
+      if(noResults)noResults.hidden=found!==0;
+      refresh();
+    };
+    if(search)search.addEventListener("input",filter);
+    if(selectAll)selectAll.addEventListener("change",()=>{
+      for(const item of visible())if(item.checkbox)item.checkbox.checked=selectAll.checked;
+      refresh();
     });
-    if(groupMemberSearch)groupMemberSearch.addEventListener("input",()=>{
-      const query=groupMemberSearch.value.trim().toLowerCase();
-      for(const row of document.querySelectorAll(".group-member-row")){
-        row.hidden=!(row.getAttribute("data-group-member-search")||"").includes(query);
+    for(const item of indexed){
+      if(item.checkbox)item.checkbox.addEventListener("change",refresh);
+    }
+    form.addEventListener("submit",event=>{
+      if(!indexed.some(item=>item.checkbox&&item.checkbox.checked)){
+        event.preventDefault();
       }
-      refreshGroupMembers();
     });
-    refreshGroupMembers();
+    filter();
   }
   const groupSearch=document.getElementById("group-search");
   if(groupSearch){

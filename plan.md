@@ -1,5 +1,15 @@
 # Telegram Broadcaster - Status and plan
 
+## Group member-only management and phone enrichment (2026-11-22)
+- [x] Group manage page displays only current group members.
+- [x] Provide searchable picker to add contacts that are not in this group.
+- [x] Remove only selected members, preserving contact records, history and other groups.
+- [x] Search and selection are independent of Active/Inactive status.
+- [x] Reimport fills only missing phone, username or Telegram numeric ID on a verified match.
+- [x] Preserve nonempty identities, owner boundaries, user activation, notes and consent.
+- [ ] Verify offline tests, fresh-install CI, and browser interaction.
+- [ ] Deploy following backup and no-active-send check, then reimport affected contact source to backfill visible phone values.
+
 ## Imported contacts inactive-by-default (2026-11-22)
 - [x] Direct Telegram scan imports create new records with enabled=0.
 - [x] CSV imports create records with enabled=0 even when Enabled=yes appears in the input.
