@@ -365,6 +365,77 @@ async def bulk_contact_group_action(request: Request):
                     "Existing consent and other group assignments are preserved.")
 
 
+@app.post("/contacts/bulk-consent")
+async def bulk_contact_consent_action(request: Request):
+    person=principal(request)
+    form=await request.form(max_fields=6000)
+    authorize(request,str(form.get("csrf","")))
+    scope=str(form.get("scope","selected"))
+    grant=str(form.get("action",""))=="grant"
+    action=str(form.get("action",""))
+    if action not in ("grant","withdraw"):
+        raise HTTPException(400,"Choose a valid consent action")
+    group_id=None
+    try:
+        if scope not in ("selected","group"):
+            raise ValueError("Choose a valid consent scope")
+        group_id=int(str(form.get("group_id","0"))) if scope=="group" else None
+        selected=[int(str(value)) for value in form.getlist("contacts")] if scope=="selected" else None
+        verified=str(form.get("verified",""))=="yes"
+        evidence=str(form.get("evidence",""))
+        with core.database() as db:
+            updated,total=core.bulk_update_contact_consent(
+                db,person["admin_id"],person["admin_id"],
+                grant=grant,evidence=evidence,verified=verified,
+                contact_ids=selected,group_id=group_id,
+            )
+            db.commit()
+    except (ValueError,TypeError) as exc:
+        target=f"/contacts/groups/{group_id}" if scope=="group" and group_id else "/contacts"
+        return redirect(target,str(exc))
+    target=f"/contacts/groups/{group_id}" if scope=="group" else "/contacts"
+    operation="Opt-in recorded" if grant else "Consent withdrawn"
+    return redirect(
+        target,f"{operation} for {updated} of {total} selected contacts. "
+        "Other groups and contact records were preserved. Change recorded in consent history.",
+    )
+
+
+@app.post("/contacts/bulk-remove")
+async def bulk_remove_contacts_action(request: Request):
+    person=principal(request)
+    form=await request.form(max_fields=6000)
+    authorize(request,str(form.get("csrf","")))
+    try:
+        selected=[int(str(value)) for value in form.getlist("contacts")]
+        with core.database() as db:
+            archived=core.bulk_archive_contacts(db,person["admin_id"],selected)
+            db.commit()
+    except (ValueError,TypeError) as exc:
+        return redirect("/contacts",str(exc))
+    return redirect(
+        "/contacts",
+        f"{archived} contacts removed from active recipients. "
+        "Broadcast history was preserved; no messages were sent.",
+    )
+
+
+@app.get("/contacts/consent-history")
+def consent_history_page(request: Request):
+    person=principal(request)
+    with core.database() as db:
+        rows=db.execute("""
+            SELECT h.id,h.previous_consent,h.new_consent,h.evidence,h.source,
+                   h.created_at,c.name AS contact_name,a.username AS actor_name
+            FROM contact_consent_events h
+            JOIN contacts c ON c.id=h.contact_id AND c.owner_id=h.owner_id
+            JOIN admins a ON a.id=h.actor_id
+            WHERE h.owner_id=?
+            ORDER BY h.id DESC LIMIT 150
+        """,(person["admin_id"],)).fetchall()
+    return render(request,"consent_history.html",title="Consent history",events=rows)
+
+
 @app.get("/contacts/groups")
 def contact_group_page(request: Request):
     user=principal(request)

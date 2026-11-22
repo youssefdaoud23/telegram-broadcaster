@@ -1,14 +1,15 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-heading"><div><span class="eyebrow accent">AUDIENCE DATABASE</span><h1>Your contacts</h1><p class="subtle">Organize contacts into multiple groups and target eligible recipients separately.</p></div>
-<div class="history-actions"><a class="btn btn-secondary" href="/contacts/groups">Manage groups</a><a class="btn btn-outline" href="/contacts/export">↓ Export CSV</a></div></div>
+<div class="history-actions"><a class="btn btn-secondary" href="/contacts/groups">Manage groups</a><a class="btn btn-outline" href="/contacts/consent-history">Consent history</a><a class="btn btn-outline" href="/contacts/export">↓ Export CSV</a></div></div>
 <div class="contacts-grid">
   <section class="panel"><div class="panel-head"><h2>Contact list <span class="count-pill">{{ contacts|length }}</span></h2></div>
     <form class="search-row" action="/contacts" method="get"><input name="q" value="{{ query }}" placeholder="Search by name, username, or phone...">
       <select name="group_id" aria-label="Filter contacts by group">
         <option value="0">All contact groups</option>{% for group in groups %}<option value="{{ group['id'] }}" {% if group_id==group['id'] %}selected{% endif %}>{{ group['name'] }} ({{ group['total'] }})</option>{% endfor %}
       </select><button class="btn btn-secondary">Filter</button></form>
-    {% if groups and contacts %}
+    {% if contacts %}
+    {% if groups %}
     <form id="bulk-contact-group-form" method="post" action="/contacts/bulk-group" class="contacts-bulk-form">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <span class="contact-bulk-count" id="bulk-contact-count">0 selected</span>
@@ -22,11 +23,43 @@
         data-confirm="Remove selected contacts from this group? Other group assignments remain unchanged.">Remove selected</button>
     </form>
     {% endif %}
+    <div class="contacts-bulk-action-area">
+      {% if not groups %}<div class="contact-bulk-count" id="bulk-contact-count">0 selected</div>{% endif %}
+      <form id="bulk-consent-form" data-bulk-selected method="post" action="/contacts/bulk-consent" class="contacts-bulk-form bulk-consent-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="scope" value="selected">
+        <div class="bulk-action-intro"><strong>Bulk consent for selected contacts</strong>
+          <p class="subtle">Recording opt-in requires actual permission from each person, not merely membership in a Telegram group.</p></div>
+        <label for="bulk-consent-evidence">Evidence or source of permission</label>
+        <input type="text" id="bulk-consent-evidence" name="evidence" maxlength="500"
+          placeholder="e.g. Written opt-in from each selected person">
+        <label class="checkline consent-attestation"><input type="checkbox" name="verified" value="yes">
+          I have verified that every selected person explicitly agreed to private messages.</label>
+        <div class="form-actions">
+          <button type="submit" name="action" value="grant" class="btn btn-primary"
+            data-confirm="Record opt-in for ALL selected contacts? Only confirm if each person has given permission.">
+            Record verified opt-in</button>
+          <button type="submit" name="action" value="withdraw" class="btn btn-secondary"
+            data-confirm="Withdraw messaging consent for ALL selected contacts? This prevents future pending deliveries.">
+            Withdraw consent</button>
+        </div>
+      </form>
+      <form id="bulk-remove-form" data-bulk-selected method="post" action="/contacts/bulk-remove" class="contacts-bulk-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <strong>Remove selected contacts</strong>
+        <span class="subtle">Archives contacts and disables them. Past campaign records remain intact.</span>
+        <button class="btn btn-outline danger-text" type="submit"
+          data-confirm="Remove ALL selected contacts from active recipients? They will be archived and disabled, but delivery history will be preserved.">
+          Remove selected contacts
+        </button>
+      </form>
+    </div>
+    {% endif %}
     <div class="table-scroll"><table class="contacts-table"><thead><tr>
-    <th>{% if groups %}<input type="checkbox" id="bulk-select-all" aria-label="Select all visible contacts">{% endif %}</th>
+    <th>{% if contacts %}<input type="checkbox" id="bulk-select-all" aria-label="Select all visible contacts">{% endif %}</th>
     <th>Contact</th><th>Telegram identifier</th><th>Groups</th><th>Eligibility</th><th></th></tr></thead><tbody>
     {% for c in contacts %}
-    <tr><td>{% if groups %}<input type="checkbox" name="contacts" value="{{ c['id'] }}" form="bulk-contact-group-form" class="bulk-contact-checkbox" aria-label="Select {{ c['name'] }}">{% endif %}</td>
+    <tr><td><input type="checkbox" name="contacts" value="{{ c['id'] }}" {% if groups %}form="bulk-contact-group-form"{% endif %} class="bulk-contact-checkbox" aria-label="Select {{ c['name'] }}"></td>
     <td><div class="person-cell"><span class="contact-avatar">{{ c['name'][:1]|upper }}</span><div><a class="table-primary" href="/contacts/{{ c['id'] }}/edit">{{ c['name'] }}</a><div class="table-secondary">{{ c['notes'][:60] or '-' }}</div></div></div></td>
     <td><span class="mono">{{ c['username'] or c['phone'] or c['user_id'] }}</span></td>
     <td><div class="contact-group-tags">{% for g in groups %}{% if g['id'] in membership.get(c['id'], []) %}

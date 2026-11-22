@@ -51,6 +51,26 @@ Use **Telegram accounts > Check all sessions**. Telegram may revoke old sessions
 
 Telegram may hide members or phone numbers and can rate-limit enumeration. The export reports partial/limited scans. A "Complete" result only means that the accessible API iteration ended. Do not attempt to bypass account or group permissions.
 
+## How do I consent to or remove many contacts at once?
+
+On **Contacts**, tick individual checkboxes or **Select all visible**,
+including after filtering to a contact group. You can then:
+
+- Add or remove selected people from an application contact group.
+- **Record verified opt-in** with the evidence/source and a confirmation
+  that all selected contacts independently gave permission.
+- **Withdraw consent** without an opt-in attestation.
+- **Remove selected contacts** (archive/disable, retaining history).
+
+For **all members of a group**, visit **Contact groups > Manage** and
+use the whole-group consent section. This affects the contact's
+permission everywhere they appear, including other groups. Changing
+membership does not change consent. Check **Consent history** to review
+recent bulk changes and their reasons.
+
+Imported Telegram members remain non-consenting until actual opt-in
+is confirmed. Do not use group membership itself as a consent source.
+
 ## A group member has neither a username nor a phone number
 
 This is normal: Telegram lets users hide phone numbers and omit public

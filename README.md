@@ -96,6 +96,38 @@ The standard Contacts CSV importer understands this header and
 **Phone Number**. Direct import is preferred when working with groups
 already scanned in this app.
 
+## Bulk consent, withdrawal, and contact removal
+
+You can manage many contacts at once without editing them individually:
+
+1. Open **Contacts**, optionally filter by a contact group, select several
+   contacts or use **Select all visible**.
+2. To manage permission, enter a source/evidence note and choose **Record
+   verified opt-in** or **Withdraw consent**. Granting consent requires an
+   explicit checkbox confirming that *each selected person* has already
+   agreed to private messages. Simply joining a Telegram group or importing
+   the group is not evidence of messaging consent.
+3. To remove contacts, choose **Remove selected contacts** and confirm.
+   This **archives and disables** contacts instead of permanently deleting
+   their campaign and delivery history. Archived contacts are excluded from
+   future broadcasts.
+
+To apply consent to everyone in a contact group, open **Contact groups**,
+choose a group, and use **Consent for the entire group**. The same evidence
+requirement applies to granting. Withdrawal works without an opt-in
+attestation, and it applies to the contact globally: a contact in several
+groups stops being eligible in all of them.
+
+**Consent history** on the Contacts page lists recent bulk changes, the
+operator who made them, timestamps, and the recorded evidence or withdrawal
+reason. Historical consent values entered before this feature do not gain
+retroactive audit records. New records are owner-scoped in SQLite.
+
+These operations never send Telegram messages. Both campaign creation and
+the sending worker check current consent before delivering. Revocation
+prevents future pending deliveries; it cannot recall a message already
+sent or stop one already in flight.
+
 ## Website templates and appearance
 
 The interface includes two selectable designs. **Telegram Classic** is the

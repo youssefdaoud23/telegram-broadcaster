@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <a class="back-link" href="/contacts">← Back to contacts</a>
+    <span class="eyebrow accent">CONTACT PERMISSIONS</span>
+    <h1>Consent history</h1>
+    <p class="subtle">Recent changes to messaging permission, recorded with the operator and evidence or reason. This is an audit of bulk actions, not proof that a person independently granted permission.</p>
+  </div>
+</div>
+<section class="panel">
+  <div class="panel-head"><h2>Recent changes <span class="count-pill">{{ events|length }}</span></h2></div>
+  {% if events %}
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Date (UTC)</th><th>Contact</th><th>Change</th><th>Source</th><th>Operator</th><th>Evidence or reason</th></tr></thead>
+      <tbody>
+      {% for event in events %}
+      <tr>
+        <td class="mono">{{ event['created_at']|moment }}</td>
+        <td>{{ event['contact_name'] }}</td>
+        <td>{% if event['new_consent'] %}<span class="status status-connected">Opted in</span>{% else %}<span class="status status-muted">Consent withdrawn</span>{% endif %}</td>
+        <td class="mono">{{ event['source'] }}</td>
+        <td>{{ event['actor_name'] }}</td>
+        <td class="consent-history-evidence">{{ event['evidence'] }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="subtle">Showing the 150 most recent bulk consent changes for your workspace. Original, individually recorded consent values may predate this audit feature.</p>
+  {% else %}
+  <div class="empty-state"><h3>No bulk consent changes yet</h3>
+    <p>When you record or withdraw consent for selected contacts or a full group, the changes will appear here.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

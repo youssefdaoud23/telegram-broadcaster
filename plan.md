@@ -266,3 +266,21 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [ ] Publish to GitHub and verify CI clean-build tests.
 - [ ] After verified backup and no in-progress broadcasts, deploy in /opt
       and verify the actual interface and scanned group import manually.
+
+
+## Bulk consent and bulk contact removal (2026-11-22)
+
+- [x] Allow selected contacts to be granted verified opt-in or withdrawn.
+- [x] Allow all active members of a private group to be granted or withdrawn.
+- [x] Require explicit person-by-person verification and an evidence/source
+      record for opt-in grants; reject group membership as stand-alone proof.
+- [x] Add owner-isolated, time-stamped per-contact consent change auditing.
+- [x] Add selected-contact soft removal (archive+disable) without deleting
+      historical campaign and delivery records.
+- [x] Keep existing bulk membership changes independent from contact consent.
+- [x] Validate user ownership, CSRF, limits, duplicates and all selected
+      IDs before changes; perform updates in an atomic SQLite transaction.
+- [x] Test consent grant/withdraw, whole-group effects, audit, archive
+      safety, history preservation and draft eligibility without Telegram.
+- [ ] Verify full CI and fresh Docker smoke after GitHub publish.
+- [ ] Deploy to production only after verified backup and no sends active.

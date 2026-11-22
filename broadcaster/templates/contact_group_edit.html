@@ -35,6 +35,27 @@
     </form>
   </section>
   <div class="side-stack">
+    <section class="panel">
+      <div class="panel-head"><h2>Consent for the entire group</h2></div>
+      <p class="subtle">Apply to all {{ members|length }} current members of this group. Consent belongs to each contact across ALL groups: withdrawing it here also affects their other groups. Group membership alone does not establish permission.</p>
+      <form method="post" action="/contacts/bulk-consent" class="stack-form compact">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="scope" value="group">
+        <input type="hidden" name="group_id" value="{{ group['id'] }}">
+        <label for="group-consent-evidence">Evidence or source of permission</label>
+        <textarea id="group-consent-evidence" name="evidence" rows="2" maxlength="500"
+          placeholder="e.g. Each member signed up to receive messages"></textarea>
+        <label class="checkline consent-attestation"><input type="checkbox" name="verified" value="yes">
+          I have verified permission from every member of this group.</label>
+        <button class="btn btn-primary" type="submit" name="action" value="grant"
+          data-confirm="Record verified opt-in for ALL active members of this group? Only proceed if each one explicitly agreed.">
+          Record verified opt-in for whole group</button>
+        <button class="btn btn-outline" type="submit" name="action" value="withdraw"
+          data-confirm="Withdraw consent for ALL active members of this group? These contacts may also belong to other groups.">
+          Withdraw consent for whole group</button>
+      </form>
+      <p class="subtle"><a href="/contacts/consent-history">Review consent history</a></p>
+    </section>
     <section class="panel"><div class="panel-head"><h2>Rename group</h2></div>
       <form action="/contacts/groups/{{ group['id'] }}/rename" method="post" class="stack-form">
         <input type="hidden" name="csrf" value="{{ csrf }}">

@@ -613,3 +613,19 @@ label { color: var(--tg-text); }
   .scan-import-form,.contacts-bulk-form {align-items:stretch;flex-direction:column;}
   .scan-import-form input[name="group_name"],.contacts-bulk-form select {max-width:none;}
 }
+
+
+/* Bulk consent and archival controls. Each selected contact is explicit. */
+.contacts-bulk-action-area {display:flex;flex-direction:column;gap:10px;margin:12px 0;}
+.bulk-consent-form {align-items:center;}
+.bulk-action-intro {flex:1 0 100%;}
+.bulk-action-intro strong {font-size:13px;}
+.bulk-action-intro p {margin:5px 0 0;}
+.bulk-consent-form input[name="evidence"] {min-width:230px;flex:1;}
+.consent-attestation {max-width:100%;line-height:1.45;}
+.contacts-bulk-action-area .contacts-bulk-form {margin:0;}
+.consent-history-evidence {max-width:310px;overflow-wrap:anywhere;}
+@media(max-width:690px) {
+  .bulk-consent-form input[name="evidence"] {min-width:0;width:100%;}
+  .contacts-bulk-action-area .form-actions {flex-direction:column;align-items:stretch;}
+}

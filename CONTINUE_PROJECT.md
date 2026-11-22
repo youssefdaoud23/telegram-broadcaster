@@ -86,3 +86,16 @@ Before making any changes:
     hash; never claim all users are messageable. The Contacts page also
     has an additive/removal bulk group membership action. Preserve
     cross-workspace/CSRF validation and the 5,000-member import bound.
+
+
+24. A newly added bulk consent feature has selected-contact and whole-group
+    operations. Explicitly verified direct individual permission and an
+    evidence/source note are required for granting. Group membership,
+    scanning and import never grant consent. Withdrawal is available
+    without attestation and applies to each contact across all groups.
+    Store auditable changes in contact_consent_events, owner scoped.
+    Never claim the app independently verifies consent beyond the
+    operator's attestation. Bulk contact removal is archive+disable,
+    never physical deletion of campaign or delivery history. The
+    Telegram worker rechecks consent before each send, but cannot
+    retract already sent or in-flight messages.

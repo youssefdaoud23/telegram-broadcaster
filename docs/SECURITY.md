@@ -47,6 +47,22 @@ permissions or privacy restrictions. No phone lookup is performed.
 
 Do not use the system to send unsolicited bulk private messages. When a campaign is interrupted, an unknown delivery state is **not automatically retried**; review history and the Telegram conversation before deliberately reusing a previous broadcast.
 
+## Bulk permission changes
+
+Operators may record verified opt-in for multiple contacts or an entire
+private contact group, but **only after confirming every person individually
+gave permission to receive private messages**. An evidence/source note is
+required. Membership of any Telegram group, including an imported scan,
+does not establish consent. The app records each changed contact's prior
+and new consent value, operator, timestamp, and evidence in an audit table.
+
+Bulk consent withdrawal does not require proof of permission and applies
+to the contact across all their private audience groups. Selected-contact
+bulk removal archives and disables contacts; delivery snapshots remain
+available in campaign history. Pending delivery operations recheck current
+consent; messages that were already sent or are in flight cannot be
+retracted by revoking consent.
+
 ## Operational cautions
 
 - Never commit or share `.env`, `data/`, session files, database backups, or recipient exports to GitHub.

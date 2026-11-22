@@ -98,6 +98,19 @@ CREATE TABLE IF NOT EXISTS contacts (
  updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_archived ON contacts(archived,enabled,consent);
+CREATE TABLE IF NOT EXISTS contact_consent_events (
+ id INTEGER PRIMARY KEY,
+ contact_id INTEGER NOT NULL REFERENCES contacts(id),
+ owner_id INTEGER NOT NULL REFERENCES admins(id),
+ actor_id INTEGER NOT NULL REFERENCES admins(id),
+ previous_consent INTEGER NOT NULL CHECK(previous_consent IN (0,1)),
+ new_consent INTEGER NOT NULL CHECK(new_consent IN (0,1)),
+ evidence TEXT NOT NULL,
+ source TEXT NOT NULL,
+ created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_consent_events_owner_time
+ ON contact_consent_events(owner_id,created_at DESC,id DESC);
 CREATE TABLE IF NOT EXISTS contact_groups (
  id INTEGER PRIMARY KEY,
  owner_id INTEGER NOT NULL REFERENCES admins(id),
@@ -581,6 +594,128 @@ def bulk_update_group_members(db: sqlite3.Connection, owner_id: int,
             [(group_id, cid, now()) for cid in contact_ids],
         )
     return db.total_changes - before
+
+
+def _validate_selected_contacts(db: sqlite3.Connection, owner_id: int,
+                                ids: list[int], max_count: int = 5000) -> None:
+    if not 1 <= len(ids) <= max_count:
+        raise ValueError(f"Choose between 1 and {max_count:,} active contacts")
+    if len(ids) != len(set(ids)) or any(
+        isinstance(cid, bool) or not isinstance(cid, int) or cid <= 0 for cid in ids
+    ):
+        raise ValueError("Invalid or duplicated contact selection")
+    missing = set(ids)
+    for start in range(0, len(ids), 450):
+        chunk = ids[start:start+450]
+        holders = ",".join("?" for _ in chunk)
+        rows = db.execute(
+            f"SELECT id FROM contacts WHERE owner_id=? AND archived=0 "
+            f"AND id IN ({holders})", (owner_id, *chunk)
+        ).fetchall()
+        missing.difference_update(row["id"] for row in rows)
+    if missing:
+        raise ValueError("One or more contacts no longer exist in your workspace")
+
+
+def bulk_archive_contacts(db: sqlite3.Connection, owner_id: int,
+                          contact_ids: list[int]) -> int:
+    """Soft-remove selected contacts; preserve campaigns and delivery snapshots."""
+    db.execute("BEGIN IMMEDIATE")
+    _validate_selected_contacts(db, owner_id, contact_ids)
+    archived = 0
+    for start in range(0, len(contact_ids), 450):
+        chunk = contact_ids[start:start+450]
+        holders = ",".join("?" for _ in chunk)
+        result = db.execute(
+            f"UPDATE contacts SET archived=1,enabled=0,updated_at=? "
+            f"WHERE owner_id=? AND archived=0 AND id IN ({holders})",
+            (now(), owner_id, *chunk),
+        )
+        archived += result.rowcount
+    return archived
+
+
+def bulk_update_contact_consent(
+    db: sqlite3.Connection, owner_id: int, actor_id: int,
+    *, grant: bool, evidence: str, verified: bool = False,
+    contact_ids: list[int] | None = None, group_id: int | None = None,
+) -> tuple[int,int]:
+    """Record evidence and changes only for active, owner-scoped contacts.
+
+    Grant never happens merely because someone joined/imported a Telegram
+    group. The operator explicitly verifies prior permission for every
+    person selected. Withdrawal does not require verification.
+    Return (changed_count, selected_count). Caller commits on success.
+    """
+    if actor_id != owner_id:
+        # Every website user has their own isolated contact workspace.
+        raise ValueError("Consent changes must be made by the workspace user")
+    evidence = " ".join(evidence.strip().split())
+    if len(evidence) > 500:
+        raise ValueError("Consent reason or evidence must be under 500 characters")
+    insufficient_proof = {
+        "group membership", "telegram group membership", "telegram group",
+        "imported from group", "imported from telegram", "group import",
+        "member of group", "public telegram group", "scraped from group",
+    }
+    if grant and (not verified or len(evidence) < 10
+                  or evidence.casefold() in insufficient_proof):
+        raise ValueError(
+            "Confirm each person's direct permission and record how it was obtained "
+            "(group membership or import is not evidence of opt-in)"
+        )
+    if not grant and not evidence:
+        evidence = "Consent withdrawn in contact management"
+    if (group_id is None) == (contact_ids is None):
+        raise ValueError("Choose selected contacts or one whole group")
+    db.execute("BEGIN IMMEDIATE")
+    if group_id is not None:
+        if isinstance(group_id,bool) or not isinstance(group_id,int) or group_id<=0:
+            raise ValueError("Invalid group")
+        group = db.execute("SELECT id FROM contact_groups WHERE id=? AND owner_id=?",
+                           (group_id,owner_id)).fetchone()
+        if not group:
+            raise ValueError("Contact group not found in your workspace")
+        rows = db.execute("""
+            SELECT c.id,c.consent FROM contacts c
+            JOIN contact_group_members m ON m.contact_id=c.id
+            JOIN contact_groups g ON g.id=m.group_id
+            WHERE g.id=? AND g.owner_id=? AND c.owner_id=? AND c.archived=0
+            ORDER BY c.id
+        """,(group_id,owner_id,owner_id)).fetchall()
+        if len(rows)>20000:
+            raise ValueError("Group exceeds the 20,000-contact safety limit")
+        source = "whole_group:" + str(group_id)
+    else:
+        assert contact_ids is not None
+        _validate_selected_contacts(db,owner_id,contact_ids)
+        rows=[]
+        for start in range(0,len(contact_ids),450):
+            chunk=contact_ids[start:start+450]
+            holders=",".join("?" for _ in chunk)
+            rows+=db.execute(
+                f"SELECT id,consent FROM contacts WHERE owner_id=? AND archived=0 "
+                f"AND id IN ({holders})",(owner_id,*chunk),
+            ).fetchall()
+        source="selected_contacts"
+    intended=int(grant)
+    changes=[row for row in rows if row["consent"]!=intended]
+    timestamp=now()
+    for row in changes:
+        updated=db.execute(
+            "UPDATE contacts SET consent=?,updated_at=? "
+            "WHERE id=? AND owner_id=? AND archived=0 AND consent=?",
+            (intended,timestamp,row["id"],owner_id,row["consent"]),
+        )
+        if updated.rowcount!=1:
+            raise ValueError("Contact status changed during consent update; retry")
+        db.execute("""
+            INSERT INTO contact_consent_events
+            (contact_id,owner_id,actor_id,previous_consent,new_consent,
+             evidence,source,created_at)
+            VALUES (?,?,?,?,?,?,?,?)
+        """,(row["id"],owner_id,actor_id,row["consent"],intended,evidence,source,timestamp))
+    return len(changes),len(rows)
 
 
 def set_group_members(db: sqlite3.Connection, owner_id: int,

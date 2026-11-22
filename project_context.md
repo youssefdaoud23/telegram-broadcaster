@@ -341,3 +341,39 @@ replacement remains separate. CSV Contacts import also supports scan
 headers Phone Number and Telegram User ID; exported string fields have
 spreadsheet formula safety treatment. No new DB tables or external apps.
 Production /opt not modified by developing this staging checkout.
+
+
+## Bulk contact consent and bulk soft removal (2026-11-22)
+
+Requested: grant/withdraw consent for multiple selected contacts or all
+members of a contact group, plus removing many contacts at once.
+
+Core adds table contact_consent_events with owner_id,actor_id,contact_id,
+previous/new consent, evidence/source, created_at and owner/time index.
+Bulk consent is transactionally checked against authenticated user
+ownership and archived status. Direct grants require an explicit checked
+attestation and a meaningful evidence/source note (minimum 10 chars,
+max 500); membership in a Telegram group alone is rejected as a basis.
+Withdrawal needs no attestation and records a default reason when blank.
+Both actions log per-contact changes only, not redundant no-ops.
+Whole-group operations read current active memberships, and contact
+consent is global across all groups. Selected contact actions validate
+1..5000 IDs; whole-group operations are capped at 20000 members.
+No importing, membership, draft creation or sending is triggered.
+
+POST /contacts/bulk-consent supports scope=selected with explicit
+contact IDs or scope=group with validated owner group_id. The Contacts
+page shows evidence/verification inputs and selected-contact Grant/
+Withdraw controls. The Contact group manage page has whole-group
+Grant/Withdraw forms. GET /contacts/consent-history shows recent
+owner-scoped changes; pre-feature consent has no retroactive audit.
+POST /contacts/bulk-remove archives/disables checked contact records
+transactionally, rather than deleting campaigns or delivery history.
+The existing send loop already rechecks contact consent before each
+delivery; in-flight messages cannot be retracted.
+
+Existing bulk group assign/remove remains unchanged; JS mirrors the
+selected checkboxes to the consent and archive forms when submitting.
+The new audit table is additive and created on normal app startup.
+Development uses a temporary git checkout; never edit live /opt
+data or restart production without separate verified backup.
