@@ -476,8 +476,8 @@ class DirectGroupImportTests(unittest.TestCase):
 
     def test_csv_enabled_column_cannot_autoactivate_new_records_or_existing_records(self):
         # New contacts must stay inactive even when a CSV explicitly says Enabled=yes.
-        raw=("Name,Username,Enabled,Opt In\\n"
-             "New Contact,@new_inactive_csv,yes,yes\\n").replace("\\\\n","\\n").encode()
+        raw=("Name,Username,Enabled,Opt In\n"
+             "New Contact,@new_inactive_csv,yes,yes\n").encode()
         result=self.http.post(
             "/contacts/import",data={"csrf":self.csrf},
             files={"file":("contacts.csv",raw,"text/csv")},
@@ -491,9 +491,14 @@ class DirectGroupImportTests(unittest.TestCase):
             self.assertIsNotNone(contact)
             self.assertEqual((contact["enabled"],contact["consent"]),(0,1))
             contact_id=contact["id"]
-            # The user deliberately activates one imported contact.
-            db.execute("UPDATE contacts SET enabled=1 WHERE id=?",(contact_id,))
             db.commit()
+        # Deliberately activate through the same action as the page switch.
+        toggled=self.http.post(
+            f"/contacts/{contact_id}/status",
+            data={"csrf":self.csrf,"action":"activate"},
+            follow_redirects=False,
+        )
+        self.assertEqual(toggled.status_code,303)
         result=self.http.post(
             "/contacts/import",data={"csrf":self.csrf},
             files={"file":("contacts.csv",raw,"text/csv")},
