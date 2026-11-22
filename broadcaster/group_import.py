@@ -39,7 +39,7 @@ def _data_for_member(member: group_export.ExportMember) -> dict[str, str]:
 
 def import_contact_record(
     db: sqlite3.Connection, data: dict[str, str], owner_id: int,
-    group_ids: list[int], *, consent: bool = False, enabled: bool = True,
+    group_ids: list[int], *, consent: bool = False, enabled: bool = False,
     restore_archived: bool = False,
 ) -> tuple[bool, int, bool]:
     """Create, reuse or explicitly restore a safely matched contact.
@@ -47,7 +47,7 @@ def import_contact_record(
     Returns (created, new_group_links, restored). The caller owns the
     transaction/savepoint. Existing active contacts retain all flags;
     a removed contact may be restored only by an explicit import action.
-    Restored records never regain historical message consent automatically.
+    Newly created and restored records start inactive. Restored records also\n    never regain historical message consent automatically.
     """
     core._allowed_group_ids(db, owner_id, group_ids)
     matches = db.execute("""
@@ -76,7 +76,7 @@ def import_contact_record(
             if not restore_archived:
                 raise ValueError("Removed contact requires explicit restoration")
             result = db.execute(
-                "UPDATE contacts SET archived=0,enabled=1,consent=0,updated_at=? "
+                "UPDATE contacts SET archived=0,enabled=0,consent=0,updated_at=? "
                 "WHERE id=? AND owner_id=? AND archived=1",
                 (core.now(), contact_id, owner_id),
             )
@@ -142,7 +142,7 @@ def import_scan_members(db: sqlite3.Connection, scan: group_export.GroupScan,
         try:
             data = _data_for_member(member)
             is_new, new_links, was_restored = import_contact_record(
-                db, data, owner_id, [group_id], consent=False, enabled=True,
+                db, data, owner_id, [group_id], consent=False, enabled=False,
                 restore_archived=True,
             )
             if is_new:
