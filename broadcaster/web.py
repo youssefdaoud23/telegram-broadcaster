@@ -744,13 +744,10 @@ async def import_contacts(request: Request, csrf: str = Form(""),
                             pending_groups[key] = group_id
                         selected_groups.append(group_id)
                     selected_groups = sorted(set(selected_groups))
-                    active = (yes(row.get("Enabled")) if
-                              str(row.get("Enabled") or "").strip() else
-                              not yes(row.get("Do Not Contact")))
                     is_new, added_links, was_restored = group_import.import_contact_record(
                         db, data, user["admin_id"], selected_groups,
                         consent=yes(row.get("Opt In") or row.get("Consent")),
-                        enabled=active, restore_archived=True,
+                        enabled=False, restore_archived=True,
                     )
                     db.execute("RELEASE SAVEPOINT import_contact")
                     known_groups.update(pending_groups)
@@ -780,8 +777,8 @@ async def import_contacts(request: Request, csrf: str = Form(""),
         if skipped:
             reason = max(skipped_reasons, key=skipped_reasons.get)
             message += f" Main skip reason: {reason[:85]}."
-        message += (" Existing active contacts were unchanged; restored contacts "
-                    "are enabled but require new messaging consent.")
+        message += (" New and restored contacts are Inactive by default. "
+                    "Existing contacts keep their prior Active status and messaging permission.")
         target = "/contacts"
         if requested_group:
             group_id = known_groups.get(requested_group.casefold())
@@ -925,7 +922,7 @@ def import_group_scan_action(request: Request, scan_token: str,
         f"{summary.created} contacts added, {summary.restored} removed contacts restored, "
         f"{summary.linked_existing} existing contacts linked, "
         f"{summary.already_in_group} already in group, {summary.skipped} skipped. "
-        "New and restored contacts have no messaging consent. No messages were sent.",
+        "New and restored contacts are Inactive with no messaging consent. No messages were sent.",
     )
 
 
