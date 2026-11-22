@@ -486,7 +486,7 @@ class DirectGroupImportTests(unittest.TestCase):
         self.assertEqual(result.status_code,303)
         with core.database() as db:
             contact=db.execute(
-                "SELECT id,enabled,consent FROM contacts WHERE username='new_inactive_csv'"
+                "SELECT id,enabled,consent FROM contacts WHERE username='@new_inactive_csv'"
             ).fetchone()
             self.assertIsNotNone(contact)
             self.assertEqual((contact["enabled"],contact["consent"]),(0,1))
