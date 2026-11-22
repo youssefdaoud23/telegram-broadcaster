@@ -504,7 +504,40 @@ class DirectGroupImportTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],0)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contact_groups").fetchone()[0],0)
 
-    def test_csv_conflict_rolls_back_new_group_and_preserves_archived_record(self):
+    def test_csv_reimport_restores_archived_contact_and_resets_permission(self):
+        self.make_scan(members=[
+            group_export.ExportMember("Reimport","archive_csv_user","","123456789")
+        ])
+        self.assertEqual(self.post_import().status_code,303)
+        with core.database() as db:
+            cid=db.execute("SELECT id FROM contacts WHERE owner_id=?",
+                           (self.owner_id,)).fetchone()["id"]
+            db.execute("UPDATE contacts SET consent=1 WHERE id=?",(cid,))
+            db.commit()
+        deleted=self.http.post(
+            f"/contacts/{cid}/remove",data={"csrf":self.csrf},
+            follow_redirects=False,
+        )
+        self.assertEqual(deleted.status_code,303)
+        csv_data=self.http.get("/groups/scans/scan-token-123/export").content
+        restored=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf},
+            files={"file":("members.csv",csv_data,"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(restored.status_code,303)
+        self.assertIn("restored%201%20removed%20contacts",restored.headers["location"])
+        with core.database() as db:
+            contact=db.execute("SELECT id,archived,enabled,consent FROM contacts "
+                               "WHERE owner_id=?",(self.owner_id,)).fetchone()
+            self.assertEqual(tuple(contact),(cid,0,1,0))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
+            self.assertEqual(core.contact_groups(db,self.owner_id)[0]["total"],1)
+            audit=db.execute("SELECT previous_consent,new_consent FROM "
+                             "contact_consent_events WHERE contact_id=?",(cid,)).fetchall()
+            self.assertEqual([tuple(x) for x in audit],[(1,0)])
+
+    def test_csv_conflicting_archived_identifier_cannot_restore_or_create_group(self):
         with core.database() as db:
             old=core.insert_contact(
                 db,core.normalize_contact(
@@ -513,11 +546,11 @@ class DirectGroupImportTests(unittest.TestCase):
             )
             db.execute("UPDATE contacts SET archived=1 WHERE id=?",(old,))
             db.commit()
-        raw=("Name,Username,Telegram User ID,Telegram Group\n"
-             "Archived,@archived_user1,123456789,Should Not Be Created\n")
+        raw=("Name,Username,Telegram User ID,Telegram Group\\n"
+             "Changed,@archived_user1,999999999,Should Not Be Created\\n")
         response=self.http.post(
             "/contacts/import",data={"csrf":self.csrf},
-            files={"file":("archived.csv",raw.encode(),"text/csv")},
+            files={"file":("conflict.csv",raw.encode(),"text/csv")},
             follow_redirects=False,
         )
         self.assertEqual(response.status_code,303)
