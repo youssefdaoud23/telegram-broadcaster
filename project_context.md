@@ -324,8 +324,10 @@ broadcaster/group_import.py validates owner, completed/partial scan state,
 group name and max 5000 scanned members, then creates/reuses same-named
 private contact group and imports members with available identifiers.
 Existing contacts are matched safely across Telegram ID/username/phone;
-conflicting or archived records are skipped; existing group memberships,
-consent and manually edited details are preserved. Missing numeric IDs
+conflicting identifiers are skipped; explicit re-import restores matching
+archived contacts using the original IDs and preserved group links, with
+archived=0, enabled=1, consent=0 and opt-in reset audited. Active contacts
+keep consent and manually edited details. Missing numeric IDs
 can be filled on safely recognized existing contacts. Each member import
 uses an SQLite savepoint; no Telegram API requests or messages. Newly
 created contacts have consent=False and enabled=True. No opt-in is inferred
