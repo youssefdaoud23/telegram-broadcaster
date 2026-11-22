@@ -345,6 +345,18 @@ spreadsheet formula safety treatment. No new DB tables or external apps.
 Production /opt not modified by developing this staging checkout.
 
 
+## Import defaults: Inactive until manual activation (2026-11-22)
+
+Direct Telegram group scans and the Contacts CSV importer create new contacts
+with enabled=0, regardless of an inbound Enabled=yes column. An explicitly
+reimported archived contact is restored with archived=0, enabled=0 and
+consent=0; original record ID, links and history remain preserved. Reusing
+an existing, unarchived contact to add group membership does not overwrite
+its enabled or consent settings. The existing single, selected, and group
+Active/Inactive controls are used to enable contacts after import.
+Neither importing nor activation grants verified private-message permission;
+the sending eligibility rules remain unchanged.
+
 ## Contact UI: live filtering, phones, and activation switches (2026-11-22)
 
 Contacts now renders the entire current user's active contact dataset,
