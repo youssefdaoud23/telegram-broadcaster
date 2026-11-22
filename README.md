@@ -66,13 +66,16 @@ group with that name is reused. There is no download/re-upload step.
 Each new contact stores available name, username, phone and Telegram user ID
 (up to 5,000 members per direct import). Contacts already in the database
 are linked to the group without duplicating them or deleting their previous
-group memberships. Conflicting identifiers and previously archived contacts
-are skipped rather than silently merged or reactivated. Group scans with
-partial results remain explicitly labeled incomplete.
+group memberships. Conflicting identifiers are skipped, while an explicit
+re-import safely restores matching previously removed contacts using their
+original database record and group memberships. Restored contacts return as
+active with consent reset to No consent; any previous opt-in is recorded as
+withdrawn in the audit history. Group scans with partial results remain
+explicitly labeled incomplete.
 
-**No scanned member is automatically opted in**: newly imported contacts
-start with consent disabled. Existing contacts keep their recorded consent
-and enabled status. A shared Telegram group is not consent to receive
+**No scanned member is automatically opted in**: newly imported and restored
+contacts start with consent disabled. Existing active contacts retain their
+recorded consent and enabled status. A shared Telegram group is not consent to receive
 private promotional messages. The app never sends or drafts messages as
 part of importing.
 
