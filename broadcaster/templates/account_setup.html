@@ -9,6 +9,7 @@
     <div class="alert alert-success">This Telegram account is connected. You can select it in the message composer.</div>
     <form action="/accounts/{{ account['id'] }}/verify" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-secondary">Check session (no messages sent)</button></form>
     {% else %}
+    {% if account['state']=='disconnected' %}<div class="alert alert-warning">The previous Telegram session has expired or been revoked. This account cannot send messages until you sign in again.</div>{% endif %}
     <div class="alert alert-neutral">Telegram will send a one-time code to your Telegram app. Enter the code only into this protected website.</div>
     <form action="/accounts/{{ account['id'] }}/request-code" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-secondary">Send / resend Telegram code</button></form>
     {% endif %}

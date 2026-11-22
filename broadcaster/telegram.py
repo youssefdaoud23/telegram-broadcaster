@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 from pathlib import Path
 
 from telethon import TelegramClient, errors, types
@@ -14,6 +15,16 @@ from .core import database, decrypt, encrypt, now
 log = logging.getLogger(__name__)
 _locks: dict[str, asyncio.Lock] = {}
 _tasks: set[asyncio.Task] = set()
+# Avoid repeated Telegram authorization calls on every navigation.
+_status_checks: dict[str, float] = {}
+STATUS_TTL_SECONDS = 90
+REVOKED_ERRORS = (
+    errors.AuthKeyUnregisteredError, errors.AuthKeyDuplicatedError,
+    errors.AuthKeyInvalidError, errors.SessionRevokedError,
+    errors.SessionExpiredError, errors.UserDeactivatedError,
+    errors.UserDeactivatedBanError,
+)
+SESSION_EXPIRED_MESSAGE = "Telegram session has expired or been revoked. Reconnect this account."
 
 
 class TelegramProblem(Exception):
@@ -63,13 +74,20 @@ def _fetch_account(account_id: str):
     return row
 
 
-def _save_state(account_id: str, state: str, username: str = "", code_hash: str | None = None):
+def _save_state(account_id: str, state: str, username: str = "", code_hash: str | None = None,
+                last_error: str = ""):
     with database() as db:
         db.execute("""
             UPDATE accounts SET state=?, username=CASE WHEN ?<>'' THEN ? ELSE username END,
-            code_hash_enc=?, last_error='',updated_at=? WHERE id=?
-        """, (state, username, username, code_hash, now(), account_id))
+            code_hash_enc=?, last_error=?,updated_at=? WHERE id=?
+        """, (state, username, username, code_hash, last_error, now(), account_id))
         db.commit()
+    _status_checks.pop(account_id, None)
+
+
+def _mark_revoked(account_id: str) -> None:
+    """Mark only confirmed session revocation as disconnected, never a network outage."""
+    _save_state(account_id, "disconnected", last_error=SESSION_EXPIRED_MESSAGE)
 
 
 async def request_code(account_id: str) -> None:
@@ -151,25 +169,75 @@ async def verify_password(account_id: str, password: str) -> None:
             raise telegram_error(exc) from exc
 
 
-async def verify_connected(account_id: str) -> str:
-    """Check a session's actual identity without changing it or sending a message."""
+async def verify_connected(account_id: str, *, cache_seconds: int = 0) -> str:
+    """Verify the actual Telegram session and persist confirmed disconnections.
+
+    Never sends a message or automatically signs in. A transient network
+    failure does not mean that the Telegram session was revoked.
+    """
     async with account_lock(account_id):
         row = _fetch_account(account_id)
+        if row["state"] != "connected":
+            raise TelegramProblem("Telegram account is not connected. Request a login code.")
+        checked = _status_checks.get(account_id)
+        if cache_seconds and checked is not None and time.monotonic() - checked < cache_seconds:
+            return row["username"] or row["label"]
+        client = None
         try:
             client = new_client(row)
-            await client.connect()
-            try:
+
+            async def check() -> str:
+                await client.connect()
                 if not await client.is_user_authorized():
-                    raise TelegramProblem("Telegram session has expired or been revoked. Reconnect this account.")
+                    _mark_revoked(account_id)
+                    raise TelegramProblem(SESSION_EXPIRED_MESSAGE)
                 me = await client.get_me()
-                _finish_login(account_id, row, me)
+                if me is None:
+                    _mark_revoked(account_id)
+                    raise TelegramProblem(SESSION_EXPIRED_MESSAGE)
+                actual = ("@" + me.username).lower() if me.username else ""
+                if (row["expected_username"] and row["expected_username"].lower() != actual) or (
+                    row["username"] and row["username"].lower() != actual
+                ):
+                    # Never replace a stored identity with another user.
+                    _mark_revoked(account_id)
+                    raise TelegramProblem("The Telegram session identity changed. Reconnect this account.")
+                _status_checks[account_id] = time.monotonic()
                 return ("@" + me.username) if me.username else (me.first_name or "Telegram user")
-            finally:
-                await client.disconnect()
+
+            return await asyncio.wait_for(check(), timeout=12)
         except TelegramProblem:
             raise
+        except REVOKED_ERRORS as exc:
+            _mark_revoked(account_id)
+            raise TelegramProblem(SESSION_EXPIRED_MESSAGE) from exc
         except Exception as exc:
+            # Do not mark disconnected on DNS, timeouts or transient RPC errors.
             raise telegram_error(exc) from exc
+        finally:
+            if client is not None:
+                try:
+                    await asyncio.wait_for(client.disconnect(), timeout=3)
+                except Exception:
+                    log.warning("Session status check cleanup failed: %s", account_id)
+
+
+async def refresh_connected_accounts(account_ids: list[str], *, force: bool = False) -> list[str]:
+    """Refresh visible account statuses without sending, with bounded concurrency."""
+    semaphore = asyncio.Semaphore(3)
+
+    async def refresh(account_id: str) -> str | None:
+        async with semaphore:
+            try:
+                await verify_connected(account_id, cache_seconds=0 if force else STATUS_TTL_SECONDS)
+            except TelegramProblem as exc:
+                # Only confirmed revocations change state. Report transient errors.
+                if "connection failed" in str(exc).lower() or "rejected the request" in str(exc).lower():
+                    return "Some Telegram sessions could not be checked. Try again later."
+            return None
+
+    results = await asyncio.gather(*(refresh(account_id) for account_id in account_ids))
+    return sorted(set(message for message in results if message))
 
 
 async def dispatch(campaign_id: str):
@@ -202,8 +270,12 @@ async def dispatch(campaign_id: str):
             await client.connect()
             try:
                 if not await client.is_user_authorized():
+                    _mark_revoked(account_id)
                     raise TelegramProblem("Telegram sender session expired")
                 me = await client.get_me()
+                if me is None:
+                    _mark_revoked(account_id)
+                    raise TelegramProblem("Telegram sender session expired")
                 actual = ("@" + me.username).lower() if me.username else ""
                 if (row["expected_username"] and row["expected_username"].lower() != actual) or (
                     row["username"] and row["username"].lower() != actual
@@ -258,6 +330,8 @@ async def dispatch(campaign_id: str):
             finally:
                 await client.disconnect()
         except Exception as exc:
+            if isinstance(exc, REVOKED_ERRORS):
+                _mark_revoked(account_id)
             log.warning("Campaign %s ended with %s", campaign_id, type(exc).__name__)
             with database() as db:
                 db.execute("UPDATE campaigns SET state='failed',completed_at=? WHERE id=?", (now(),campaign_id))

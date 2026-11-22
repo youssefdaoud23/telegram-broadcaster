@@ -76,6 +76,16 @@ def require_owner(user):
     return user
 
 
+async def refresh_owner_sessions(owner_id: int, *, force: bool = False) -> list[str]:
+    """Read-only Telegram checks; store disconnected only on confirmed revocation."""
+    with core.database() as db:
+        ids = [r["id"] for r in db.execute(
+            "SELECT id FROM accounts WHERE owner_id=? AND state='connected'",
+            (owner_id,),
+        ).fetchall()]
+    return await telegram.refresh_connected_accounts(ids, force=force)
+
+
 def render(request: Request, name: str, status_code: int = 200, **data):
     person = None
     with core.database() as db:
@@ -244,9 +254,10 @@ def logout(request: Request, csrf: str = Form("")):
 
 
 @app.get("/")
-def home(request: Request):
+async def home(request: Request):
     user=principal(request)
     owner_id=user["admin_id"]
+    await refresh_owner_sessions(owner_id)
     with core.database() as db:
         stats = {
             "contacts": db.execute("SELECT COUNT(*) c FROM contacts WHERE owner_id=? AND archived=0",(owner_id,)).fetchone()["c"],
@@ -400,11 +411,24 @@ def export_contacts(request: Request):
 
 
 @app.get("/accounts")
-def accounts_page(request: Request):
+async def accounts_page(request: Request):
     user=principal(request)
+    warnings=await refresh_owner_sessions(user["admin_id"])
     with core.database() as db:
-        accounts = db.execute("SELECT id,label,username,state,created_at FROM accounts WHERE owner_id=? ORDER BY created_at DESC",(user["admin_id"],)).fetchall()
-    return render(request, "accounts.html", title="Telegram accounts", accounts=accounts)
+        accounts = db.execute(
+            "SELECT id,label,username,state,last_error,created_at FROM accounts "
+            "WHERE owner_id=? ORDER BY created_at DESC",
+            (user["admin_id"],),
+        ).fetchall()
+    return render(request, "accounts.html", title="Telegram accounts",
+                  accounts=accounts, session_warnings=warnings)
+
+
+@app.post("/accounts/refresh")
+async def refresh_accounts_action(request: Request, csrf: str = Form("")):
+    user=authorize(request,csrf)
+    warnings=await refresh_owner_sessions(user["admin_id"],force=True)
+    return redirect("/accounts",warnings[0] if warnings else "Telegram session statuses refreshed. No messages sent.")
 
 
 @app.get("/accounts/new")
@@ -444,9 +468,13 @@ def account_detail(account_id: str, owner_id: int):
 
 
 @app.get("/accounts/{account_id}/setup")
-def account_setup(request: Request, account_id: str):
+async def account_setup(request: Request, account_id: str):
     user=principal(request)
-    return render(request,"account_setup.html",title="Verify Telegram account",account=account_detail(account_id,user["admin_id"]))
+    account=account_detail(account_id,user["admin_id"])
+    if account["state"] == "connected":
+        await telegram.refresh_connected_accounts([account_id])
+        account=account_detail(account_id,user["admin_id"])
+    return render(request,"account_setup.html",title="Verify Telegram account",account=account)
 
 
 @app.post("/accounts/{account_id}/request-code")
@@ -488,8 +516,9 @@ async def account_verify(request: Request, account_id: str, csrf: str = Form("")
 
 
 @app.get("/compose")
-def compose(request: Request):
+async def compose(request: Request):
     user=principal(request)
+    await refresh_owner_sessions(user["admin_id"])
     with core.database() as db:
         accounts = db.execute("SELECT id,label,username FROM accounts WHERE owner_id=? AND state='connected' ORDER BY label",(user["admin_id"],)).fetchall()
         contacts = db.execute("SELECT * FROM contacts WHERE owner_id=? AND archived=0 AND enabled=1 AND consent=1 ORDER BY name COLLATE NOCASE",(user["admin_id"],)).fetchall()
@@ -576,6 +605,8 @@ async def send_campaign(request: Request, campaign_id: str, csrf: str = Form("")
     with core.database() as db:
         campaign, deliveries=core.campaign_summary(db,campaign_id,user["admin_id"])
         if not campaign:raise HTTPException(404,"Campaign not found")
+        if campaign["account_state"] != "connected":
+            return redirect(f"/campaigns/{campaign_id}","Sender session is disconnected. Reconnect Telegram before sending.")
         limit=core.recipient_limit()
         if limit is not None and len(deliveries)>limit:
             return redirect(f"/campaigns/{campaign_id}","Campaign exceeds the configured recipient limit.")

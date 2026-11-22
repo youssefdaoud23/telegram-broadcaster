@@ -439,3 +439,7 @@ label { color: var(--tg-text); }
 .user-password-details summary { cursor:pointer; color:var(--blue); font-weight:650; }
 .user-password-details .stack-form { margin-top:12px; }
 .workspace-identity { color:var(--blue); font-weight:650; }
+
+/* Expired/revoked Telegram authentication state. */
+.status-disconnected { background: #ffe9e7; color: #bb554d; }
+:root[data-theme="dark"] .status-disconnected { background: #4e292d; color: #ffaaa4; }

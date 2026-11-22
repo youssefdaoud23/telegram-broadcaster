@@ -216,6 +216,37 @@ persisted campaign/delivery states and Telegram's own chat history. The
 administrator CLI no longer triggers in-flight recovery when initializing its
 database connection.
 
+## Telegram session status after revocation
+
+The account list used to show a cached `Connected` label even after a
+Telegram session was terminated from the Telegram app. An explicit
+`Check session` could detect the revocation but did not update the
+account's stored state. This is corrected.
+
+When you open **Overview**, **Telegram accounts**, **New broadcast**, or an
+account setup page, the website checks connected sessions against Telegram
+without sending any messages. Successful checks are cached for up to
+90 seconds to avoid repeated requests. To verify immediately, click
+**Check all sessions** on **Telegram accounts** or **Check session** on an
+individual account's setup page.
+
+If Telegram confirms that a session is revoked, expired, or unauthorized,
+the account changes to **Disconnected** and is removed from the selection
+of available senders. The original username and encrypted API settings
+remain for reconnecting; no messages are sent. Request a new login code and
+complete normal Telegram authentication to reconnect.
+
+Temporary network outages and timeouts do **not** automatically mark a
+session disconnected. The website reports that some checks could not be
+completed, preserving the prior status until a conclusive check. The
+delivery worker independently checks authorization before sending and
+updates the same stored status if it discovers a revoked session. The Send
+endpoint also rejects an existing draft whose sender is disconnected.
+
+Session checks happen on webpage visits and when manually requested - this
+is not a permanent background monitor. A session can become stale between
+visits. Telegram's own rate limits and remote connectivity still apply.
+
 ## Interrupted broadcasts: Try again without duplicate sends
 
 Open **History**. An interrupted broadcast displays **Try again** when at

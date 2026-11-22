@@ -432,7 +432,8 @@ def create_campaign(db: sqlite3.Connection, account_id: str, message: str, conta
 
 def campaign_summary(db: sqlite3.Connection, campaign_id: str, owner_id: int) -> tuple[sqlite3.Row | None,list[sqlite3.Row]]:
     c=db.execute("""
-        SELECT c.*,a.label AS account_label,a.username AS account_username
+        SELECT c.*,a.label AS account_label,a.username AS account_username,
+               a.state AS account_state
         FROM campaigns c JOIN accounts a ON a.id=c.account_id AND a.owner_id=c.owner_id
         WHERE c.id=? AND c.owner_id=?
     """, (campaign_id, owner_id)).fetchone()

@@ -90,3 +90,18 @@ No automatic production DB migration until user performs database backup
 and rebuilds the container. On upgrade, take a consistent SQLite backup with
 the container's sqlite3.Connection.backup API, leave the live .env and data
 volume untouched, and only recreate broadcaster when no sends are active.
+
+## Revoked Telegram session state (2026-11-22)
+
+Past issue: Account page displayed a stored `connected` flag even after
+Telegram app terminated the session. /accounts/{id}/verify correctly detected
+revocation but raised a TelegramProblem without persisting `disconnected`.
+Now verify_connected detects explicit unauthorized/revoked state, persists
+`disconnected` and safe last_error, and removes it from composing. Account
+status is refreshed on Overview, Accounts, New broadcast and account setup
+pages, with 90-second in-process success cache and 12-second check timeout.
+Users can force an immediate check using POST /accounts/refresh with CSRF
+or the individual Check session action. Transient network failures leave
+connection state unchanged. The send worker also marks confirmed expired
+sessions disconnected. Status checks never send Telegram messages or
+automatically reconnect sessions. All queries respect user-owned accounts.

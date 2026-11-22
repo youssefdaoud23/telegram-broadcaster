@@ -2,6 +2,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from cryptography.fernet import Fernet
@@ -30,11 +31,15 @@ class WebsiteTests(unittest.TestCase):
             self.owner_id=db.execute(
                 "SELECT id FROM admins WHERE username='admin-test'"
             ).fetchone()["id"]
+        # Synthetic connected test accounts must never connect to Telegram.
+        self.refresh_patcher=patch("broadcaster.web.telegram.refresh_connected_accounts",return_value=[])
+        self.refresh_patcher.start()
         self.testclient=TestClient(app,raise_server_exceptions=True)
         self.testclient.__enter__()
 
     def tearDown(self):
         self.testclient.__exit__(None,None,None)
+        self.refresh_patcher.stop()
         for k,v in self.old.items():
             if v is None:os.environ.pop(k,None)
             else:os.environ[k]=v

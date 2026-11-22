@@ -88,3 +88,19 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [ ] Create a dedicated test user, verify they start with empty contacts
       and accounts and can independently connect Telegram (no message sends).
 - [ ] Restrict publicly reachable port 8789 at firewall / Cloudflare origin.
+
+## Telegram authorization status (2026-11-22)
+
+- [x] Diagnose stale connected flag after Telegram app revokes session.
+- [x] Persist disconnected after explicit unauthorized/revoked checks.
+- [x] Automatically check connected accounts on Overview, Accounts,
+      New broadcast, and account setup pages, with cached success checks.
+- [x] Add CSRF-protected Check all sessions button to force a new check.
+- [x] Keep temporary network failures from incorrectly revoking valid logins.
+- [x] Drop revoked accounts from sending account selection immediately.
+- [x] Reject Send on old drafts whose Telegram sender is now disconnected.
+- [x] Mark disconnected on revoked sessions discovered by delivery worker.
+- [x] Verify offline regression tests with no live Telegram requests.
+- [ ] Rebuild only broadcaster when no campaign is actively running, then
+      confirm a previously revoked account becomes Disconnected in UI.
+- [ ] Confirm reconnect code request can authenticate a new Telegram session.

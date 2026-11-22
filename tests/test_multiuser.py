@@ -33,6 +33,9 @@ class MultiUserWebsiteTests(unittest.TestCase):
         os.environ.pop("SEND_MAX_RECIPIENTS",None)
         core.init_db()
         core.create_admin("admin","owner-password")
+        # Keep all synthetic test credentials completely offline.
+        self.refresh_patcher=patch("broadcaster.web.telegram.refresh_connected_accounts",return_value=[])
+        self.refresh_patcher.start()
         self.owner=TestClient(app,raise_server_exceptions=True)
         self.member=TestClient(app,raise_server_exceptions=True)
         self.owner.__enter__()
@@ -54,6 +57,7 @@ class MultiUserWebsiteTests(unittest.TestCase):
     def tearDown(self):
         self.member.__exit__(None,None,None)
         self.owner.__exit__(None,None,None)
+        self.refresh_patcher.stop()
         for key,value in self.previous.items():
             if value is None:
                 os.environ.pop(key,None)
