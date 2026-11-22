@@ -41,4 +41,4 @@ The setup script creates a unique random 32-byte Fernet key. Keep backups of `.e
 
 See [Security](SECURITY.md) and [Operations](OPERATIONS.md).
 
-SQLite and session files require persistent storage on one instance. 
+SQLite and session files require persistent storage on one instance.
