@@ -579,57 +579,132 @@ def remove_contact(request: Request, contact_id: int, csrf: str = Form("")):
 
 
 @app.post("/contacts/import")
-async def import_contacts(request: Request, csrf: str = Form(""), file: UploadFile = File(...)):
-    user=authorize(request, csrf)
-    raw = await file.read(1024*1024 + 1)
-    if len(raw) > 1024*1024:
+async def import_contacts(request: Request, csrf: str = Form(""),
+                          file: UploadFile = File(...),
+                          group_name: str = Form("")):
+    user = authorize(request, csrf)
+    raw = await file.read(1024 * 1024 + 1)
+    if len(raw) > 1024 * 1024:
         return redirect("/contacts", "CSV file too large (1 MB maximum).")
     try:
         contents = raw.decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(contents))
-        if not reader.fieldnames or not {"Name","name"}.intersection(reader.fieldnames):
-            raise ValueError("CSV requires a Name column and a Telegram ID, Username or Phone column")
-        good = skipped = 0
+        reader = csv.DictReader(io.StringIO(contents, newline=""), strict=True)
+        if not reader.fieldnames or not {"Name", "name"}.intersection(reader.fieldnames):
+            raise ValueError("CSV requires a Name column and Telegram ID, Username or Phone")
+        records = list(reader)
+        if len(records) > 5000:
+            raise ValueError("CSV has more than 5,000 rows; split it into smaller files.")
+        if not records:
+            raise ValueError("CSV has no contact rows")
+        requested_group = core.validate_group_name(group_name) if group_name.strip() else ""
+        yes = lambda value: str(value or "").strip().casefold() in {"yes", "true", "1", "y"}
+        created = linked = unchanged = skipped = new_groups = 0
+        skipped_reasons: dict[str, int] = {}
+        imported_group_ids: set[int] = set()
         with core.database() as db:
-            group_names={group["name"].casefold():group["id"]
-                         for group in core.contact_groups(db,user["admin_id"])}
-            for index, row in enumerate(reader):
-                if index >= 1000:
-                    break
-                raw_identifier = (row.get("ID") or "").strip()
-                username = row.get("Username") or row.get("username") or (raw_identifier if raw_identifier.startswith("@") else "")
-                phone = row.get("Phone") or row.get("Phone Number") or row.get("phone") or (raw_identifier if raw_identifier.startswith("+") else "")
-                numeric = row.get("User ID") or row.get("Telegram User ID") or (raw_identifier if raw_identifier.isdigit() else "")
+            known_groups = {
+                group["name"].casefold(): group["id"]
+                for group in core.contact_groups(db, user["admin_id"])
+            }
+            for row in records:
                 db.execute("SAVEPOINT import_contact")
+                pending_groups: dict[str, int] = {}
                 try:
-                    contact = core.normalize_contact(
-                        row.get("Name") or row.get("name") or "", username, phone, numeric, row.get("Notes") or "",
+                    if None in row:
+                        raise ValueError("Row has more columns than the CSV header")
+                    raw_identifier = (row.get("ID") or "").strip()
+                    username = (row.get("Username") or row.get("username") or
+                                (raw_identifier if raw_identifier.startswith("@") else ""))
+                    phone = (row.get("Phone") or row.get("Phone Number") or row.get("phone") or
+                             (raw_identifier if raw_identifier.startswith("+") else ""))
+                    numeric = (row.get("User ID") or row.get("Telegram User ID") or
+                               (raw_identifier if raw_identifier.isdigit() else ""))
+                    data = core.normalize_contact(
+                        row.get("Name") or row.get("name") or "",
+                        username, phone, numeric, row.get("Notes") or "",
                     )
-                    yes = lambda v: str(v or "").lower().strip() in {"yes","true","1","y"}
-                    supplied_names=[name.strip() for name in (row.get("Groups") or "").split(";")
-                                    if name.strip()]
-                    selected_groups=[]
-                    for group_name in supplied_names:
-                        group_id=group_names.get(group_name.casefold())
+                    explicit_names = [
+                        core.validate_group_name(name.strip())
+                        for name in (row.get("Groups") or "").split(";") if name.strip()
+                    ]
+                    keys = [name.casefold() for name in explicit_names]
+                    if len(keys) != len(set(keys)):
+                        raise ValueError("Duplicate group name in CSV row")
+                    selected_groups = []
+                    for key in keys:
+                        if key not in known_groups:
+                            raise ValueError("Unknown contact group in CSV; create it before importing.")
+                        selected_groups.append(known_groups[key])
+
+                    # A manually chosen group takes precedence over the
+                    # Telegram Group metadata in scan-generated CSV files.
+                    automatic_name = requested_group
+                    if not automatic_name and (row.get("Telegram Group") or "").strip():
+                        raw_group_name = row["Telegram Group"].strip()
+                        # Undo the spreadsheet-formula escape added by our
+                        # own group CSV exporter before validating its name.
+                        if (raw_group_name.startswith("'") and
+                                raw_group_name[1:].lstrip().startswith(("=", "+", "-", "@"))):
+                            raw_group_name = raw_group_name[1:]
+                        automatic_name = group_export.suggested_group_name(
+                            raw_group_name
+                        )
+                    if automatic_name:
+                        key = automatic_name.casefold()
+                        group_id = known_groups.get(key) or pending_groups.get(key)
                         if group_id is None:
-                            raise ValueError("Unknown contact group in CSV. Create it before importing.")
+                            if new_groups + len(pending_groups) >= 100:
+                                raise ValueError("Import may create at most 100 new groups")
+                            group_id = core.add_contact_group(
+                                db, user["admin_id"], automatic_name,
+                            )
+                            pending_groups[key] = group_id
                         selected_groups.append(group_id)
-                    contact_id=core.insert_contact(
-                        db,contact,user["admin_id"],
+                    selected_groups = sorted(set(selected_groups))
+                    active = (yes(row.get("Enabled")) if
+                              str(row.get("Enabled") or "").strip() else
+                              not yes(row.get("Do Not Contact")))
+                    is_new, added_links = group_import.import_contact_record(
+                        db, data, user["admin_id"], selected_groups,
                         consent=yes(row.get("Opt In") or row.get("Consent")),
-                        enabled=not yes(row.get("Do Not Contact")),
+                        enabled=active,
                     )
-                    core.set_contact_groups(db,user["admin_id"],contact_id,selected_groups)
                     db.execute("RELEASE SAVEPOINT import_contact")
-                    good += 1
-                except ValueError:
+                    known_groups.update(pending_groups)
+                    new_groups += len(pending_groups)
+                    imported_group_ids.update(selected_groups)
+                    if is_new:
+                        created += 1
+                    elif added_links:
+                        linked += 1
+                    else:
+                        unchanged += 1
+                except (ValueError, sqlite3.IntegrityError, TypeError) as exc:
                     db.execute("ROLLBACK TO SAVEPOINT import_contact")
                     db.execute("RELEASE SAVEPOINT import_contact")
                     skipped += 1
+                    reason = str(exc).splitlines()[0][:100] or "Invalid contact"
+                    skipped_reasons[reason] = skipped_reasons.get(reason, 0) + 1
             db.commit()
+        message = (
+            f"Imported {created} contacts; linked {linked} existing contacts; "
+            f"{unchanged} already present; {skipped} skipped; "
+            f"{new_groups} groups created."
+        )
+        if skipped:
+            reason = max(skipped_reasons, key=skipped_reasons.get)
+            message += f" Main skip reason: {reason[:85]}."
+        message += " Existing consent and disabled settings were preserved."
+        target = "/contacts"
+        if requested_group:
+            group_id = known_groups.get(requested_group.casefold())
+            if group_id is not None:
+                target = f"/contacts/groups/{group_id}"
+        elif len(imported_group_ids) == 1:
+            target = f"/contacts/groups/{next(iter(imported_group_ids))}"
+        return redirect(target, message)
     except (UnicodeError, ValueError, csv.Error) as exc:
         return redirect("/contacts", f"Import rejected: {str(exc)[:150]}")
-    return redirect("/contacts", f"Imported {good} contacts; skipped {skipped}. Only opted-in contacts can receive messages.")
 
 
 @app.get("/contacts/export")
@@ -725,13 +800,14 @@ def group_scan_csv(request: Request, scan_token: str):
         raise HTTPException(409, "No group member details are ready for export")
     output = io.StringIO(newline="")
     writer = csv.writer(output)
-    writer.writerow(["Name", "Username", "Phone Number", "Telegram User ID"])
+    writer.writerow(["Name", "Username", "Phone Number", "Telegram User ID", "Telegram Group"])
     for member in sorted(scan.members, key=lambda m: (m.name.casefold(), m.username.casefold())):
         # Missing usernames/phones stay blank. An ID may resolve only through
         # the Telegram session that originally saw that group member.
         # Neutralize formula-like names when opened in spreadsheet apps.
         writer.writerow([_csv_safe_name(member.name), member.username,
-                         member.phone, member.user_id])
+                         member.phone, member.user_id,
+                         _csv_safe_name(group_export.suggested_group_name(scan.group_title))])
     return StreamingResponse(
         iter([output.getvalue().encode("utf-8-sig")]),
         media_type="text/csv; charset=utf-8",

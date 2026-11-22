@@ -92,7 +92,9 @@
     <section class="panel"><div class="panel-head"><div><h2>Import from CSV</h2><p class="subtle">Includes Google Sheets exports.</p></div></div>
       <form action="/contacts/import" method="post" enctype="multipart/form-data" class="stack-form compact">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="file" name="file" accept=".csv,text/csv" required>
-        <small>Columns: Name, ID or Username, optional Phone / User ID / Opt In / Groups. Separate existing group names with semicolons. Imports do not automatically grant consent.</small>
+        <label for="csv-import-group">Import into contact group (optional)</label>
+        <input id="csv-import-group" name="group_name" maxlength="64" placeholder="Reuse or create a group">
+        <small>Up to 5,000 CSV rows and 1 MB. Existing contacts are reused, not duplicated. The optional group is created if missing; group-export CSVs also carry their Telegram group name. The Groups column uses existing groups. Existing consent and disabled status are preserved, and new contacts default to no consent.</small>
         <button class="btn btn-secondary btn-block" type="submit">Import contacts</button>
       </form>
     </section>

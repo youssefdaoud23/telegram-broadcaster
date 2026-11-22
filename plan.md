@@ -1,5 +1,18 @@
 # Telegram Broadcaster - Status and plan
 
+## CSV / direct import reconciliation fix (2026-11-22)
+- [x] Use one owner-scoped, conflict-aware contact matcher for both CSV and direct Telegram scan imports.
+- [x] Link recognized existing contacts to requested groups; preserve all unrelated memberships and consent/disabled flags.
+- [x] Allow manual CSV import into a named new/existing group and emit Telegram Group metadata in scan CSV exports.
+- [x] Honor Enabled during CSV creation, preserve existing contact settings, and never revive archived contacts.
+- [x] Stop silently truncating CSV files after 1,000 rows; reject more than 5,000 before any database writes.
+- [x] Report created, linked, unchanged, skipped and group creation counts.
+- [x] Clarify that group-editor contact list contains ALL workspace contacts, not only members.
+- [ ] Verify full offline regression suite, fresh-install CI, and code review on a feature branch.
+- [ ] Deploy to production only with a verified SQLite backup and no active sends; confirm actual group memberships before any data repair.
+- [ ] Correct any previously unassigned production group contacts only after inspecting owner-scoped records and confirming the intended association.
+
+
 - [x] Inspect canonical GitHub repo and initialize feature branch.
 - [x] Add isolated Docker environment, safe configuration template, and local-only port.
 - [x] Add local SQLite schema for admins, sessions, accounts, contacts and deliveries.

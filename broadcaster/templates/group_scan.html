@@ -28,7 +28,7 @@
   {% if scan.state in ('complete','partial','limited') and scan.members %}
   <div class="form-actions"><a class="btn btn-primary" href="/groups/scans/{{ scan.token }}/export">Download {{ scan.members|length }} members as CSV</a>
     <a class="btn btn-outline" href="/groups">Scan another group</a></div>
-  <p class="subtle">CSV columns: Name, Username, Phone Number, Telegram User ID. Hidden phone numbers and missing usernames stay blank. Telegram IDs may help the original account identify a user, but delivery is not guaranteed. Results expire after 30 minutes.</p>
+  <p class="subtle">CSV columns: Name, Username, Phone Number, Telegram User ID, Telegram Group (used to restore the original group automatically on CSV import). Hidden phone numbers and missing usernames stay blank. Telegram IDs may help the original account identify a user, but delivery is not guaranteed. Results expire after 30 minutes.</p>
   {% if scan.members|length <= direct_import_limit %}
   <div class="scan-direct-import">
     <h3>Import directly into a contact group</h3>

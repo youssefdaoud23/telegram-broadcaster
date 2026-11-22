@@ -92,9 +92,19 @@ supports selecting all shown contacts. A broadcast selects only opted-in,
 enabled recipients and requires the usual explicit preview and Send action.
 
 Exported group CSV files now have a fourth column, **Telegram User ID**.
-The standard Contacts CSV importer understands this header and
-**Phone Number**. Direct import is preferred when working with groups
-already scanned in this app.
+The Group export CSV now includes **Telegram Group**, allowing a later CSV
+import to recreate or reuse the source contact group without manually assigning
+each member. The **Contacts** CSV importer also offers an optional **Import into
+contact group** name for older CSVs without group metadata. Both import paths
+safely reuse existing matches and add missing group associations, without
+changing existing consent, enabled status, notes, or unrelated memberships.
+
+CSV files can contain up to 5,000 contact rows (1 MB), with an explicit rejection
+instead of silent truncation. The import result reports created, linked,
+unchanged, and skipped records. An existing **Groups** column continues to refer
+only to already-created groups, while the **Telegram Group** column or the
+manually entered group name can create a new group. The original direct-import
+workflow remains preferred for new scans.
 
 ## Bulk consent, withdrawal, and contact removal
 
