@@ -22,6 +22,7 @@ class ImportSummary:
     linked_existing: int
     already_in_group: int
     skipped: int
+    restored: int
     created_group: bool
 
 
@@ -39,16 +40,19 @@ def _data_for_member(member: group_export.ExportMember) -> dict[str, str]:
 def import_contact_record(
     db: sqlite3.Connection, data: dict[str, str], owner_id: int,
     group_ids: list[int], *, consent: bool = False, enabled: bool = True,
-) -> tuple[bool, int]:
-    """Add or safely reuse a contact, attaching only the requested groups.
+    restore_archived: bool = False,
+) -> tuple[bool, int, bool]:
+    """Create, reuse or explicitly restore a safely matched contact.
 
-    Returns (created, new_group_links). A caller-managed savepoint must roll
-    back validation failures. Existing flags, notes and other memberships
-    are never changed; archived or conflicting records cannot be revived.
+    Returns (created, new_group_links, restored). The caller owns the
+    transaction/savepoint. Existing active contacts retain all flags;
+    a removed contact may be restored only by an explicit import action.
+    Restored records never regain historical message consent automatically.
     """
     core._allowed_group_ids(db, owner_id, group_ids)
     matches = db.execute("""
-        SELECT id,username,phone,user_id,archived FROM contacts
+        SELECT id,username,phone,user_id,archived,consent,enabled
+        FROM contacts
         WHERE owner_id=? AND
         ((?<>'' AND user_id=?) OR
          (?<>'' AND username=? COLLATE NOCASE) OR
@@ -58,17 +62,42 @@ def import_contact_record(
           data["phone"], data["phone"])).fetchall()
     if len(matches) > 1:
         raise ValueError("Conflicting contact identifiers")
+    restored = False
     if matches:
         existing = matches[0]
-        if existing["archived"]:
-            raise ValueError("An archived contact must not be resurrected")
+        # Validate all supplied identifiers before restoring or modifying
+        # anything. A reused username with another numeric ID is a conflict.
         for field in ("user_id", "username", "phone"):
             if (existing[field] and data[field] and
                     existing[field].casefold() != data[field].casefold()):
                 raise ValueError(f"Existing contact has a conflicting {field}")
         contact_id = existing["id"]
-        # Only fill a missing Telegram numeric ID when another identifier
-        # safely matched. Do not overwrite identity, consent or enabled.
+        if existing["archived"]:
+            if not restore_archived:
+                raise ValueError("Removed contact requires explicit restoration")
+            result = db.execute(
+                "UPDATE contacts SET archived=0,enabled=1,consent=0,updated_at=? "
+                "WHERE id=? AND owner_id=? AND archived=1",
+                (core.now(), contact_id, owner_id),
+            )
+            if result.rowcount != 1:
+                raise ValueError("Removed contact changed while importing; retry")
+            restored = True
+            if existing["consent"]:
+                # Keep the permission transition auditable. A former opt-in
+                # cannot silently become active through re-import.
+                db.execute("""
+                    INSERT INTO contact_consent_events
+                    (contact_id,owner_id,actor_id,previous_consent,new_consent,
+                     evidence,source,created_at)
+                    VALUES (?,?,?,?,?,?,?,?)
+                """, (
+                    contact_id, owner_id, owner_id, 1, 0,
+                    "Contact restored by explicit import; prior opt-in reset",
+                    "archived_contact_reimport", core.now(),
+                ))
+        # Fill only a missing Telegram numeric ID matched using another
+        # verified identifier; preserve prior names, notes and other fields.
         if data["user_id"] and not existing["user_id"]:
             db.execute(
                 "UPDATE contacts SET user_id=?,updated_at=? "
@@ -86,7 +115,7 @@ def import_contact_record(
             "VALUES (?,?,?)", (group_id, contact_id, core.now()),
         )
         added_links += result.rowcount
-    return not bool(matches), added_links
+    return not bool(matches), added_links, restored
 
 
 def import_scan_members(db: sqlite3.Connection, scan: group_export.GroupScan,
@@ -107,16 +136,19 @@ def import_scan_members(db: sqlite3.Connection, scan: group_export.GroupScan,
     created_group = row is None
     group_id = core.add_contact_group(db, owner_id, group_name) if row is None else row["id"]
 
-    created = linked_existing = already = skipped = 0
+    created = linked_existing = already = skipped = restored = 0
     for member in scan.members:
         db.execute("SAVEPOINT telegram_group_import_member")
         try:
             data = _data_for_member(member)
-            is_new, new_links = import_contact_record(
+            is_new, new_links, was_restored = import_contact_record(
                 db, data, owner_id, [group_id], consent=False, enabled=True,
+                restore_archived=True,
             )
             if is_new:
                 created += 1
+            elif was_restored:
+                restored += 1
             elif new_links:
                 linked_existing += 1
             else:
@@ -126,4 +158,4 @@ def import_scan_members(db: sqlite3.Connection, scan: group_export.GroupScan,
             db.execute("ROLLBACK TO SAVEPOINT telegram_group_import_member")
             db.execute("RELEASE SAVEPOINT telegram_group_import_member")
             skipped += 1
-    return ImportSummary(group_id, created, linked_existing, already, skipped, created_group)
+    return ImportSummary(group_id, created, linked_existing, already, skipped, restored, created_group)
