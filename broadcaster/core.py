@@ -617,6 +617,54 @@ def _validate_selected_contacts(db: sqlite3.Connection, owner_id: int,
         raise ValueError("One or more contacts no longer exist in your workspace")
 
 
+
+def bulk_set_contacts_enabled(
+    db: sqlite3.Connection, owner_id: int, contact_ids: list[int],
+    enabled: bool,
+) -> int:
+    """Set the active flag only; never change messaging permission or history."""
+    db.execute("BEGIN IMMEDIATE")
+    _validate_selected_contacts(db, owner_id, contact_ids)
+    updated = 0
+    target = int(enabled)
+    for start in range(0, len(contact_ids), 450):
+        chunk = contact_ids[start:start + 450]
+        holders = ",".join("?" for _ in chunk)
+        result = db.execute(
+            f"UPDATE contacts SET enabled=?,updated_at=? WHERE owner_id=? "
+            f"AND archived=0 AND enabled<>? AND id IN ({holders})",
+            (target, now(), owner_id, target, *chunk),
+        )
+        updated += result.rowcount
+    return updated
+
+
+def set_group_contacts_enabled(
+    db: sqlite3.Connection, owner_id: int, group_id: int, enabled: bool,
+) -> tuple[int, int]:
+    """Update active status for one owner-scoped group, including overlaps."""
+    db.execute("BEGIN IMMEDIATE")
+    if not db.execute(
+        "SELECT 1 FROM contact_groups WHERE id=? AND owner_id=?",
+        (group_id, owner_id),
+    ).fetchone():
+        raise ValueError("Contact group not found in your workspace")
+    total = db.execute("""
+        SELECT COUNT(*) FROM contacts c
+        JOIN contact_group_members m ON m.contact_id=c.id
+        WHERE m.group_id=? AND c.owner_id=? AND c.archived=0
+    """, (group_id, owner_id)).fetchone()[0]
+    if total > 20000:
+        raise ValueError("Group exceeds the 20,000-contact safety limit")
+    target = int(enabled)
+    result = db.execute("""
+        UPDATE contacts SET enabled=?,updated_at=?
+        WHERE owner_id=? AND archived=0 AND enabled<>?
+          AND id IN (SELECT contact_id FROM contact_group_members WHERE group_id=?)
+    """, (target, now(), owner_id, target, group_id))
+    return result.rowcount, total
+
+
 def bulk_archive_contacts(db: sqlite3.Connection, owner_id: int,
                           contact_ids: list[int]) -> int:
     """Soft-remove selected contacts; preserve campaigns and delivery snapshots."""
