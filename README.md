@@ -87,6 +87,20 @@ PY
 
    Keep SEND_MAX_RECIPIENTS=3 for the first live test. Increase only after verifying actual deliveries and recipient consent.
 
+## Administrator account management
+
+Run `create-admin` only once for each new administrator username. If `admin` already exists, **do not create another administrator or delete the SQLite database**. Sign in with the existing credentials or reset its password in the trusted server terminal:
+
+~~~bash
+cd /root/n8n/telegram-broadcaster
+docker compose build broadcaster
+docker compose run --rm -it broadcaster python -m broadcaster.cli reset-admin-password
+~~~
+
+Enter the existing username (for example `admin`) and choose any non-empty password. This updates only that administrator's password, revokes their existing website sessions, and clears failed-login lockouts. Contacts, other administrators, connected Telegram accounts, and delivery records stay untouched. Passwords are never printed, logged, or stored in plaintext.
+
+If you instead run `create-admin` with an existing username, the CLI now explains how to reset the password without displaying a Python database traceback.
+
 ## Deployment workflow
 
 Always use GitHub as the source of truth. Develop on a feature branch, run tests, merge into main, then update the separate server checkout:

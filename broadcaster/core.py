@@ -153,10 +153,35 @@ def create_admin(username: str, password: str) -> None:
     init_db()
     salt = secrets.token_bytes(16)
     with database() as db:
+        try:
+            db.execute(
+                "INSERT INTO admins(username,password_salt,password_digest,created_at) VALUES (?,?,?,?)",
+                (username, salt.hex(), password_digest(password, salt), now()),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("Administrator already exists. Sign in or use reset-admin-password.") from exc
+        db.commit()
+
+
+def reset_admin_password(username: str, password: str) -> None:
+    """Reset one existing admin, revoke sessions and clear failed-login lockouts."""
+    username = username.strip()
+    if not username:
+        raise ValueError("Administrator username cannot be empty")
+    if not password:
+        raise ValueError("Administrator password cannot be empty")
+    salt = secrets.token_bytes(16)
+    digest = password_digest(password, salt)
+    with database() as db:
+        row = db.execute("SELECT id FROM admins WHERE username=?", (username,)).fetchone()
+        if row is None:
+            raise ValueError("Administrator not found. Use create-admin instead.")
         db.execute(
-            "INSERT INTO admins(username,password_salt,password_digest,created_at) VALUES (?,?,?,?)",
-            (username, salt.hex(), password_digest(password, salt), now()),
+            "UPDATE admins SET password_salt=?, password_digest=? WHERE id=?",
+            (salt.hex(), digest, row["id"]),
         )
+        db.execute("DELETE FROM sessions WHERE admin_id=?", (row["id"],))
+        db.execute("DELETE FROM login_attempts WHERE username=?", (username.lower(),))
         db.commit()
 
 

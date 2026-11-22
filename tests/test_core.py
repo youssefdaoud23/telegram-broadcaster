@@ -51,6 +51,30 @@ class PersistenceTests(unittest.TestCase):
                 self.assertTrue(core.validate_password(admin, password))
                 self.assertFalse(core.validate_password(admin, password + "wrong"))
 
+    def test_duplicate_administrator_is_friendly_and_reset_is_safe(self):
+        core.create_admin("admin", "old-password")
+        core.create_admin("another", "another-password")
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            core.create_admin("ADMIN", "new-password")
+        with core.database() as db:
+            admin = db.execute("SELECT * FROM admins WHERE username='admin'").fetchone()
+            token, _ = core.new_session(db, admin["id"])
+            core.failed_login(db, "admin")
+            db.commit()
+        core.reset_admin_password("ADMIN", "x")
+        with core.database() as db:
+            changed = db.execute("SELECT * FROM admins WHERE username='admin'").fetchone()
+            untouched = db.execute("SELECT * FROM admins WHERE username='another'").fetchone()
+            self.assertTrue(core.validate_password(changed, "x"))
+            self.assertFalse(core.validate_password(changed, "old-password"))
+            self.assertTrue(core.validate_password(untouched, "another-password"))
+            self.assertIsNone(core.session(db, token))
+            self.assertIsNone(db.execute("SELECT username FROM login_attempts WHERE username='admin'").fetchone())
+        with self.assertRaisesRegex(ValueError, "not found"):
+            core.reset_admin_password("missing", "test")
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            core.reset_admin_password("admin", "")
+
     def test_contact_normalization_and_opt_in_default(self):
         entry=core.normalize_contact(" Alice ","Alice_12345","","","intro")
         self.assertEqual(entry["username"],"@alice_12345")
