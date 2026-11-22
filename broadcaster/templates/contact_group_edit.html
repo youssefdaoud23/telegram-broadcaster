@@ -4,12 +4,13 @@
   <div><a class="back-link" href="/contacts/groups">← All contact groups</a>
     <span class="eyebrow accent">CONTACT GROUP</span>
     <h1>{{ group['name'] }}</h1>
-    <p class="subtle">Select the contacts who belong to this group. Contact consent and enabled status remain unchanged.</p></div>
+    <p class="subtle">This editor lists all contacts in your workspace, not just this group. Only checked contacts are members. Saving replaces this group's membership; consent and enabled status are unchanged.</p></div>
   <a class="btn btn-primary" href="/compose?group_id={{ group['id'] }}">Broadcast to this group</a>
 </div>
 <div class="contacts-grid">
   <section class="panel">
     <div class="panel-head"><h2>Group members <span class="count-pill" id="group-member-count">{{ members|length }} selected</span></h2></div>
+    {% if not members %}<p class="subtle">This group currently has no assigned contacts. Check the contacts to add, then select Save group members.</p>{% endif %}
     <form action="/contacts/groups/{{ group['id'] }}/members" method="post">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <div class="group-member-toolbar">
