@@ -97,7 +97,7 @@ PY
    docker compose up -d --force-recreate broadcaster
    ~~~
 
-   Keep SEND_MAX_RECIPIENTS=3 for the first live test. Increase only after verifying actual deliveries and recipient consent.
+   For small initial tests you can optionally set SEND_MAX_RECIPIENTS=3 in your private .env. If omitted, the application itself imposes no fixed recipient count per broadcast; Telegram's restrictions and practical delivery time still apply.
 
 ## Administrator account management
 
@@ -151,28 +151,38 @@ retryable contacts, the button is hidden and the Details page explains why.
 Review the exact recipients in the newly created draft before clicking Send.
 A later interruption may be retried from its own new interrupted campaign.
 
-## Recipient capacity: more than three contacts
+## Optional recipient limit
 
-**Contact storage is not limited to three.** The default safety setting
-`SEND_MAX_RECIPIENTS=3` limits **one broadcast** to three recipients while
-testing. Selecting more than that limit is rejected; it does not silently
-send to just the first three.
+This application originally enforced a default `SEND_MAX_RECIPIENTS=3` and a
+hard maximum of 100 **per broadcast** as a guard against accidental large sends
+during setup. **Neither number is required by Telegram.** There is no fixed
+application recipient cap when this variable is absent or blank.
 
-To allow a larger broadcast, edit **only** the local private `.env` on your
-server, for example `SEND_MAX_RECIPIENTS=20` (the application caps this
-setting at 100 per broadcast). With no active broadcast running, recreate
-only this app:
+The private `.env` can omit `SEND_MAX_RECIPIENTS` entirely; you can also
+set `SEND_MAX_RECIPIENTS=0` or `SEND_MAX_RECIPIENTS=unlimited` to disable
+the application cap. To impose your own optional safeguard, set any positive
+integer, e.g. `SEND_MAX_RECIPIENTS=20`. Invalid values are rejected on startup.
+
+Changing an existing server configuration only takes effect after recreating
+the broadcaster container (when no broadcasts are actively sending):
 
 ~~~bash
 cd /root/n8n/telegram-broadcaster
 docker compose up -d --no-deps --force-recreate broadcaster
 ~~~
 
+**Unlimited is not unlimited Telegram capacity.** Telegram may rate-limit,
+restrict or temporarily block accounts that send too many messages. The sender
+still delivers separately, with a delay between recipients, and stops on
+Telegram flood-wait errors. The website still requires opted-in contacts,
+an explicit preview and a separate Send action. Very large browser submissions
+also remain subject to HTTP form parsing and server resource limits; the
+application is not designed as an infinite-scale campaign queue. Consider
+sending smaller approved batches and checking delivery history before expanding.
+
 Existing contacts and message history remain in the persistent `data/`
-directory. A restart marks any orphaned in-progress campaigns interrupted
-instead of retrying them automatically. Telegram may enforce additional rate
-limits or messaging restrictions regardless of this setting. Send only to
-recipients who explicitly opted in, and start with small verified batches.
+directory. A restart interrupts any orphaned in-progress campaigns instead
+of retrying them automatically.
 
 ## Deployment workflow
 

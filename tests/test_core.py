@@ -122,6 +122,61 @@ class PersistenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 core.create_campaign(db,uid,"Hi!",[cid,cid,cid,cid],3)
 
+    def test_optional_limit_configuration(self):
+        old = os.environ.pop("SEND_MAX_RECIPIENTS", None)
+        try:
+            self.assertIsNone(core.recipient_limit())
+            for value in ("", "0", "UNLIMITED", "none"):
+                os.environ["SEND_MAX_RECIPIENTS"] = value
+                self.assertIsNone(core.recipient_limit())
+            for value, expected in (("1", 1), ("20", 20), ("1200", 1200)):
+                os.environ["SEND_MAX_RECIPIENTS"] = value
+                self.assertEqual(core.recipient_limit(), expected)
+            for bad in ("-1", "what", "2.5"):
+                os.environ["SEND_MAX_RECIPIENTS"] = bad
+                with self.assertRaisesRegex(ValueError, "SEND_MAX_RECIPIENTS"):
+                    core.recipient_limit()
+        finally:
+            if old is None:
+                os.environ.pop("SEND_MAX_RECIPIENTS", None)
+            else:
+                os.environ["SEND_MAX_RECIPIENTS"] = old
+
+    def test_campaign_can_exceed_original_100_limit_when_unset(self):
+        import uuid
+        account_id=uuid.uuid4().hex
+        with core.database() as db:
+            db.execute(
+                "INSERT INTO accounts(id,label,api_id,api_hash_enc,phone_enc,session_name,state,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,'connected',?,?)",
+                (account_id, "Offline", 123, core.encrypt("hash"), core.encrypt("+420123456789"),
+                 account_id, core.now(), core.now()),
+            )
+            ids=[]
+            for index in range(113):
+                ids.append(core.insert_contact(db,core.normalize_contact(
+                    f"Sample{index}",f"@capacitytest{index}","","",""
+                ), consent=True))
+            with self.assertRaisesRegex(ValueError, "no more than 3"):
+                core.create_campaign(db, account_id, "test", ids, 3)
+            campaign=core.create_campaign(db, account_id, "test", ids, None)
+            db.commit()
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM deliveries WHERE campaign_id=?", (campaign,)
+            ).fetchone()[0], 113)
+            db.execute("UPDATE campaigns SET state='interrupted' WHERE id=?", (campaign,))
+            db.commit()
+        with core.database() as db:
+            retried,created=core.create_retry_draft(db,campaign,None)
+            db.commit()
+            self.assertTrue(created)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM deliveries WHERE campaign_id=?", (retried,)
+            ).fetchone()[0],113)
+            self.assertEqual(db.execute(
+                "SELECT state FROM campaigns WHERE id=?", (retried,)
+            ).fetchone()[0],"draft")
+
     def test_retry_draft_only_copies_pending_opted_in_contacts(self):
         import uuid
         sender = uuid.uuid4().hex

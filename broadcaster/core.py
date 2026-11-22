@@ -18,6 +18,24 @@ def now() -> int:
     return int(time.time())
 
 
+def recipient_limit() -> int | None:
+    """Optional operator limit; missing, blank, 0, or 'unlimited' means no cap.
+
+    Telegram's own anti-spam restrictions still apply. This controls how many
+    opted-in recipients one reviewed campaign may contain, not contact storage.
+    """
+    raw = os.getenv("SEND_MAX_RECIPIENTS", "").strip()
+    if not raw or raw.lower() in {"0", "none", "unlimited"}:
+        return None
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError("SEND_MAX_RECIPIENTS must be a positive integer, 0, or unlimited") from exc
+    if value < 1:
+        raise ValueError("SEND_MAX_RECIPIENTS must be a positive integer, 0, or unlimited")
+    return value
+
+
 def db_path() -> Path:
     return Path(os.getenv("DATABASE_PATH", "/data/broadcaster.sqlite3"))
 
@@ -305,11 +323,13 @@ def insert_contact(db: sqlite3.Connection, data: dict[str,str], *, consent: bool
     return int(cursor.lastrowid)
 
 
-def create_campaign(db: sqlite3.Connection, account_id: str, message: str, contact_ids: list[int], limit: int) -> str:
+def create_campaign(db: sqlite3.Connection, account_id: str, message: str, contact_ids: list[int], limit: int | None) -> str:
     if len(message.strip()) < 1 or len(message) > 4096:
         raise ValueError("Message must contain 1–4096 characters")
-    if not 1 <= len(contact_ids) <= limit:
-        raise ValueError(f"Select between 1 and {limit} opted-in recipients")
+    if not contact_ids:
+        raise ValueError("Select at least one opted-in recipient")
+    if limit is not None and len(contact_ids) > limit:
+        raise ValueError(f"Select no more than {limit} opted-in recipients")
     if len(contact_ids) != len(set(contact_ids)):
         raise ValueError("Recipients cannot be duplicated")
     account = db.execute("SELECT * FROM accounts WHERE id=? AND state='connected'", (account_id,)).fetchone()
@@ -353,7 +373,7 @@ def retryable_count(db: sqlite3.Connection, source_id: str) -> int:
     return int(row["count"])
 
 
-def create_retry_draft(db: sqlite3.Connection, source_id: str, limit: int) -> tuple[str, bool]:
+def create_retry_draft(db: sqlite3.Connection, source_id: str, limit: int | None) -> tuple[str, bool]:
     """Create at most one reviewed draft for an interrupted campaign.
 
     Never retry sent, unknown, sending, failed or blocked results because their
@@ -388,7 +408,7 @@ def create_retry_draft(db: sqlite3.Connection, source_id: str, limit: int) -> tu
             "No safely retryable recipients remain. Only pending, opted-in recipients "
             "can be copied; sent or uncertain results require manual review."
         )
-    if len(ids) > limit:
+    if limit is not None and len(ids) > limit:
         raise ValueError(
             f"This broadcast has {len(ids)} pending recipients, but the current "
             f"per-broadcast limit is {limit}. Increase SEND_MAX_RECIPIENTS or "

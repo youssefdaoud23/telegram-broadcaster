@@ -31,6 +31,7 @@ templates.env.filters["moment"] = (
 @app.on_event("startup")
 async def startup():
     core.encryption()  # Fail closed if encryption is not configured.
+    core.recipient_limit()  # Validate optional operator limit before serving.
     core.init_db(recover_inflight=True)
 
 
@@ -77,7 +78,7 @@ def render(request: Request, name: str, status_code: int = 200, **data):
         "user": person, "csrf": person["csrf"] if person else "",
         "notice": request.query_params.get("notice", ""),
         "send_enabled": os.getenv("SEND_ENABLED", "false").lower() == "true",
-        "send_limit": max(1, min(100, int(os.getenv("SEND_MAX_RECIPIENTS", "3")))),
+        "send_limit": core.recipient_limit(),
         "current_path": request.url.path,
     }
     return templates.TemplateResponse(request, name, {**base, **data}, status_code=status_code)
@@ -395,14 +396,16 @@ def compose(request: Request):
 
 @app.post("/compose/preview")
 async def prepare_broadcast(request: Request):
-    form=await request.form()
+    # Authenticate before parsing a potentially large list of selected contacts.
+    principal(request)
+    form=await request.form(max_fields=20_000)
     authorize(request,str(form.get("csrf","")))
     account_id=str(form.get("account_id",""))
     message=str(form.get("message","")).strip()
     supplied=form.getlist("contacts")
     try:
         ids=[int(str(x)) for x in supplied]
-        limit=max(1,min(100,int(os.getenv("SEND_MAX_RECIPIENTS","3"))))
+        limit=core.recipient_limit()
         with core.database() as db:
             cid=core.create_campaign(db,account_id,message,ids,limit)
             db.commit()
@@ -448,7 +451,7 @@ def campaign_page(request: Request, campaign_id: str):
 @app.post("/campaigns/{campaign_id}/retry")
 def retry_campaign(request: Request, campaign_id: str, csrf: str = Form("")):
     authorize(request,csrf)
-    limit=max(1,min(100,int(os.getenv("SEND_MAX_RECIPIENTS","3"))))
+    limit=core.recipient_limit()
     try:
         with core.database() as db:
             new_id,created=core.create_retry_draft(db,campaign_id,limit)
@@ -470,8 +473,9 @@ async def send_campaign(request: Request, campaign_id: str, csrf: str = Form("")
     with core.database() as db:
         campaign, deliveries=core.campaign_summary(db,campaign_id)
         if not campaign:raise HTTPException(404,"Campaign not found")
-        limit=max(1,min(100,int(os.getenv("SEND_MAX_RECIPIENTS","3"))))
-        if len(deliveries)>limit:return redirect(f"/campaigns/{campaign_id}","Campaign exceeds the configured safety limit.")
+        limit=core.recipient_limit()
+        if limit is not None and len(deliveries)>limit:
+            return redirect(f"/campaigns/{campaign_id}","Campaign exceeds the configured recipient limit.")
         count=db.execute("UPDATE campaigns SET state='queued' WHERE id=? AND state='draft'",(campaign_id,)).rowcount
         db.commit()
     if count != 1:

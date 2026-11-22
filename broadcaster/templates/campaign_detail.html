@@ -15,7 +15,7 @@
 {% if retry_id %}
 <p class="subtle">A new draft was already created from this interrupted broadcast.</p>
 <a class="btn btn-secondary" href="/campaigns/{{ retry_id }}">View retry draft →</a>
-{% elif retryable > send_limit %}
+{% elif send_limit is not none and retryable > send_limit %}
 <p class="subtle">{{ retryable }} recipients are safely pending, but your limit is {{ send_limit }} per broadcast. Raise SEND_MAX_RECIPIENTS in server settings, or manually create a smaller broadcast.</p>
 {% elif retryable > 0 %}
 <p class="subtle">{{ retryable }} pending, opted-in recipient{% if retryable != 1 %}s{% endif %} can be copied into a new draft. Review it before sending. This button never sends a message.</p>

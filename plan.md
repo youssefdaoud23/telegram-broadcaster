@@ -62,3 +62,9 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [x] Add offline tests for retry eligibility, idempotency, CSRF and limits.
 - [ ] Rebuild only broadcaster container when there are no active sends.
 - [ ] Confirm retry button and preview of a previously interrupted broadcast.
+## Optional recipient limit (2026-11-22)
+- [x] Remove default three-recipient limit and arbitrary hard cap of 100 from the application.
+- [x] Leave SEND_MAX_RECIPIENTS optional for administrators who prefer their own cap.
+- [x] Keep consent, manual review/Send, stop-on-FloodWait, and idempotent retry behavior.
+- [x] Cover unlimited drafts and retries, including 1,005-recipient browser form, with offline regression tests.
+- [ ] Rebuild broadcaster image only when no active messages are being sent; verify actual UI status and configuration.

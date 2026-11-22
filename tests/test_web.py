@@ -149,6 +149,39 @@ class WebsiteTests(unittest.TestCase):
         self.assertEqual(campaign["state"], "queued")
         self.assertEqual(delivery["state"], "pending")
 
+    def test_unlimited_composer_accepts_more_than_1000_recipients(self):
+        import uuid
+        csrf=self.sign_in()
+        account_id=uuid.uuid4().hex
+        with core.database() as db:
+            db.execute(
+                "INSERT INTO accounts(id,label,api_id,api_hash_enc,phone_enc,session_name,state,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,'connected',?,?)",
+                (account_id, "Offline", 12345, core.encrypt("hash"), core.encrypt("+420123456789"),
+                 account_id, core.now(), core.now()),
+            )
+            ids=[]
+            for index in range(1005):
+                ids.append(core.insert_contact(db,core.normalize_contact(
+                    f"Sample{index}",f"@webcapacity{index}","","",""
+                ), consent=True))
+            db.commit()
+        os.environ.pop("SEND_MAX_RECIPIENTS",None)
+        compose=self.testclient.get("/compose")
+        self.assertEqual(compose.status_code,200)
+        self.assertIn("No application recipient limit",compose.text)
+        response=self.testclient.post(
+            "/compose/preview",
+            data={"csrf":csrf,"account_id":account_id,"message":"Draft only",
+                  "contacts":[str(i) for i in ids]},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code,303)
+        cid=response.headers["location"].split("?")[0].rsplit("/",1)[-1]
+        with core.database() as db:
+            row=db.execute("SELECT state,total FROM campaigns WHERE id=?",(cid,)).fetchone()
+            self.assertEqual((row["state"],row["total"]),("draft",1005))
+
     def test_interrupted_try_again_creates_reviewable_draft_only(self):
         import uuid
         from unittest.mock import patch

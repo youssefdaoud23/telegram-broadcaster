@@ -28,7 +28,7 @@ Do not change or restart any existing service for the new application.
 - Separate Telegram sessions for each account; API login code and 2FA supplied through protected UI, never stored.
 - Contacts must be active and opted in to become sendable.
 - Campaign is drafted first, previewed on a detail page, then sent after pressing one Send button.
-- SEND_ENABLED=false default; SEND_MAX_RECIPIENTS=3 default.
+- SEND_ENABLED=false default; SEND_MAX_RECIPIENTS is optional (unset/blank/0/unlimited means no application cap).
 - Background delivery tasks are single-worker, idempotent per campaign; uncertain sends are never retried automatically.
 - Legacy Google Sheet is not a live sync dependency. CSV import/export provides basic migration.
 
@@ -56,5 +56,6 @@ repeated clicks idempotent; it does not modify the original delivery records.
 Nothing sends until the administrator separately reviews and clicks Send.
 Never retry unknown, sending, failed, blocked or sent delivery results
 automatically. Source database and Telegram session files stay local and
-must not be published. The default broadcast limit is 3, adjustable locally
-up to hard application cap 100; contacts database itself is not so limited.
+must not be published. An optional positive SEND_MAX_RECIPIENTS sets a local per-broadcast cap. Without it, no app cap applies; Telegram anti-spam/rate limits and practical HTTP processing limits still apply.
+## Recipient limit configuration (2026-11-22)
+An arbitrary default of three and a hard 100-recipient limit were removed. The setting is optional: missing/empty/0/unlimited disables the local cap, positive integer enforces a custom cap, invalid values fail on startup. No change to opt-in, preview, Telegram flood handling, or actual send trigger. Large HTML forms are parsed with a bounded max_fields=20000 and authenticate before parsing. Future large-scale delivery would benefit from durable worker queues rather than one in-memory sending task.
