@@ -6,7 +6,7 @@ services:
       - PYTHONUNBUFFERED=1
     env_file: .env
     ports:
-      - "127.0.0.1:8789:8080"
+      - "8789:8080"
     volumes:
       - ./data:/data
     read_only: true
@@ -17,13 +17,3 @@ services:
       - no-new-privileges:true
     pids_limit: 200
     mem_limit: 512m
-    networks:
-      default: {}
-      cloudflare_origin:
-        aliases:
-          - telegram-broadcaster-origin
-
-networks:
-  cloudflare_origin:
-    external: true
-    name: cloudflare_default
