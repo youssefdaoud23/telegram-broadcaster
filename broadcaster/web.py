@@ -747,7 +747,7 @@ async def import_contacts(request: Request, csrf: str = Form(""),
                     is_new, added_links, was_restored = group_import.import_contact_record(
                         db, data, user["admin_id"], selected_groups,
                         consent=yes(row.get("Opt In") or row.get("Consent")),
-                        enabled=False, restore_archived=True,
+                        restore_archived=True,
                     )
                     db.execute("RELEASE SAVEPOINT import_contact")
                     known_groups.update(pending_groups)
