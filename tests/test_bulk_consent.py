@@ -236,7 +236,7 @@ class BulkConsentTests(unittest.TestCase):
         self.assertEqual(self.client.post("/contacts/bulk-remove",
             data={"csrf":"bad","contacts":[str(a)]},follow_redirects=False).status_code,403)
 
-    def test_ui_controls_work_with_no_groups_and_present_whole_group_form(self):
+    def test_ui_controls_work_with_no_groups_and_show_active_group_controls(self):
         cid=self.contact("Alice","@bulk_alice1")
         page=self.client.get("/contacts")
         self.assertEqual(page.status_code,200)
@@ -249,9 +249,11 @@ class BulkConsentTests(unittest.TestCase):
         group=self.group("All contacts")
         self.membership(cid,[group])
         page=self.client.get(f"/contacts/groups/{group}")
-        self.assertIn("whole group",page.text)
-        self.assertIn('value="group"',page.text)
-        self.assertIn("Withdraw consent for whole group",page.text)
+        self.assertIn("Group Active status",page.text)
+        self.assertIn(f'action="/contacts/groups/{group}/status"',page.text)
+        self.assertIn("Set entire group Active",page.text)
+        self.assertIn("Set entire group Inactive",page.text)
+        self.assertNotIn("Consent for the entire group",page.text)
 
     def test_consent_updates_affect_queued_and_drafted_targets(self):
         a=self.contact("Alice","@bulk_alice1",consent=True)
