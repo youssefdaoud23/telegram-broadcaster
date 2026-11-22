@@ -141,6 +141,77 @@ class DirectGroupImportTests(unittest.TestCase):
             self.assertIn(group_id,membership)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],3)
 
+    def test_direct_reimport_fills_missing_phone_but_keeps_existing_settings(self):
+        # Telegram's first scan lacked phone access; the later scan includes it.
+        self.make_scan(members=[
+            group_export.ExportMember("Customer","customer_tel99","","123456789"),
+        ])
+        first=self.post_import()
+        self.assertEqual(first.status_code,303)
+        with core.database() as db:
+            contact=db.execute("SELECT id,phone FROM contacts WHERE owner_id=?",
+                               (self.owner_id,)).fetchone()
+            self.assertEqual(contact["phone"],"")
+            cid=contact["id"]
+            db.execute("UPDATE contacts SET enabled=1,notes='Keep',consent=1 WHERE id=?",
+                       (cid,))
+            db.commit()
+        self.make_scan(members=[
+            group_export.ExportMember("Customer New Name","customer_tel99",
+                                      "+420777000111","123456789"),
+        ])
+        second=self.post_import()
+        self.assertEqual(second.status_code,303)
+        with core.database() as db:
+            contact=db.execute("SELECT * FROM contacts WHERE id=?",(cid,)).fetchone()
+            self.assertEqual(contact["phone"],"+420777000111")
+            self.assertEqual(contact["name"],"Customer")
+            self.assertEqual(contact["notes"],"Keep")
+            self.assertEqual((contact["enabled"],contact["consent"]),(1,1))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
+
+    def test_csv_reimport_backfills_missing_phone_and_username_by_numeric_id(self):
+        self.make_scan(members=[
+            group_export.ExportMember("Customer","","","123456789"),
+        ])
+        self.assertEqual(self.post_import().status_code,303)
+        with core.database() as db:
+            cid=db.execute("SELECT id FROM contacts WHERE owner_id=?",
+                           (self.owner_id,)).fetchone()["id"]
+        raw=("Name,Username,Phone Number,Telegram User ID,Telegram Group\\n"
+             "Customer New,@new_user55,+420777123456,123456789,Prague Customers\\n")
+        result=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf},
+            files={"file":("members.csv",raw.encode("utf-8"),"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(result.status_code,303)
+        with core.database() as db:
+            contact=db.execute("SELECT * FROM contacts WHERE id=?",(cid,)).fetchone()
+            self.assertEqual((contact["phone"],contact["username"],contact["user_id"]),
+                             ("+420777123456","@new_user55","123456789"))
+            self.assertEqual((contact["enabled"],contact["consent"]),(0,0))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
+
+    def test_reimport_with_conflicting_phone_does_not_change_existing_identifier(self):
+        self.make_scan(members=[
+            group_export.ExportMember("First","customer_tel99",
+                                      "+420777000111","123456789"),
+        ])
+        self.assertEqual(self.post_import().status_code,303)
+        self.make_scan(members=[
+            group_export.ExportMember("Other","customer_tel99",
+                                      "+420999000111","123456789"),
+        ])
+        again=self.post_import()
+        self.assertEqual(again.status_code,303)
+        self.assertIn("1%20skipped",again.headers["location"])
+        with core.database() as db:
+            rows=db.execute("SELECT phone FROM contacts WHERE owner_id=?",
+                            (self.owner_id,)).fetchall()
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["phone"],"+420777000111")
+
     def test_conflicting_identifier_skips_but_archived_exact_match_restores(self):
         self.make_scan(members=[
             group_export.ExportMember("Conflicting","alice_member_2","","123456789"),
