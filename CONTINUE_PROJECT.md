@@ -82,7 +82,7 @@ Before making any changes:
     contact group with the same name, reuses matching existing contacts
     safely, and restores previously archived matching contacts only through
     an explicit user-triggered import. Restored records reuse original IDs,
-    set archived=0, enabled=1 and consent=0, with prior opt-in withdrawal
+    set archived=0, enabled=0 and consent=0, with prior opt-in withdrawal
     audited when needed. Active contacts keep their consent; imports do not
     send messages. Telegram User IDs are retained in scan exports and
     may resolve only through the original sender's entity cache/access
@@ -104,6 +104,14 @@ Before making any changes:
      controls remain available under Advanced on Contacts, because receiving
      a username or group membership is not automatic private-message consent.
      Sending still requires consent and enabled status; never bypass that.
+
+23b. Import-default policy (2026-11-22): direct Telegram scan imports and CSV
+     imports create new contacts with enabled=0, even when CSV Enabled=yes.
+     Explicit import restoration of archived records also uses enabled=0,
+     consent=0 and preserves original IDs/history. Linking an existing
+     unarchived record never changes its enabled status. Individual/group/
+     selected Active toggles remain the only way to enable imported contacts
+     after import. Keep separate permission verification enforcement.
 
 24. A newly added bulk consent feature has selected-contact and whole-group
     operations. Explicitly verified direct individual permission and an

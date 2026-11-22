@@ -95,13 +95,13 @@ class DirectGroupImportTests(unittest.TestCase):
             self.assertEqual(groups[0]["total"],3)
             self.assertEqual(groups[0]["eligible"],0)
             records=db.execute(
-                "SELECT name,username,phone,user_id,consent FROM contacts WHERE owner_id=? ORDER BY name",
+                "SELECT name,username,phone,user_id,consent,enabled FROM contacts WHERE owner_id=? ORDER BY name",
                 (self.owner_id,),
             ).fetchall()
             self.assertEqual(len(records),3)
             self.assertEqual({r["user_id"] for r in records},
                              {"123456789","234567890","345678901"})
-            self.assertTrue(all(r["consent"]==0 for r in records))
+            self.assertTrue(all(r["consent"]==0 and r["enabled"]==0 for r in records))
             bob=next(r for r in records if r["name"]=="Bob Without Username")
             self.assertEqual((bob["username"],bob["phone"]),("",""))
             self.assertEqual(db.execute("SELECT COUNT(*) FROM campaigns").fetchone()[0],0)
@@ -135,6 +135,7 @@ class DirectGroupImportTests(unittest.TestCase):
             self.assertEqual(row["user_id"],"123456789")
             self.assertEqual(row["notes"],"Personal note")
             self.assertEqual(row["consent"],1)
+            self.assertEqual(row["enabled"],1)  # Reusing an active contact must not disable it.
             membership=core.contact_group_map(db,self.owner_id)[existing]
             self.assertEqual(len(membership),2)
             self.assertIn(group_id,membership)
@@ -169,7 +170,7 @@ class DirectGroupImportTests(unittest.TestCase):
                 "SELECT consent FROM contacts WHERE id=?",(conflict,)
             ).fetchone()[0],1)
             restored=db.execute("SELECT * FROM contacts WHERE id=?",(archived,)).fetchone()
-            self.assertEqual((restored["archived"],restored["enabled"],restored["consent"]),(0,1,0))
+            self.assertEqual((restored["archived"],restored["enabled"],restored["consent"]),(0,0,0))
             self.assertEqual(restored["notes"],"Old notes")
             audit=db.execute(
                 "SELECT previous_consent,new_consent,source FROM contact_consent_events "
@@ -207,7 +208,7 @@ class DirectGroupImportTests(unittest.TestCase):
                 "SELECT id FROM contacts WHERE owner_id=? ORDER BY id",(self.owner_id,)
             )],ids)
             self.assertEqual(db.execute(
-                "SELECT COUNT(*) FROM contacts WHERE archived=0 AND enabled=1 AND consent=0"
+                "SELECT COUNT(*) FROM contacts WHERE archived=0 AND enabled=0 AND consent=0"
             ).fetchone()[0],3)
             self.assertEqual(db.execute(
                 "SELECT COUNT(*) FROM contact_group_members WHERE group_id=?",(group,)
@@ -466,12 +467,48 @@ class DirectGroupImportTests(unittest.TestCase):
             ).fetchall()
             self.assertEqual(len(rows),2)
             self.assertEqual((rows[0]["enabled"],rows[0]["consent"]),(0,0))
-            self.assertEqual((rows[1]["enabled"],rows[1]["consent"]),(1,1))
+            self.assertEqual((rows[1]["enabled"],rows[1]["consent"]),(0,1))
             self.assertEqual(core.contact_groups(db,self.owner_id)[0]["total"],2)
             self.assertEqual(db.execute(
                 "SELECT COUNT(*) FROM contact_group_members"
             ).fetchone()[0],2)
         self.assertIn("already",result.headers["location"])
+
+    def test_csv_enabled_column_cannot_autoactivate_new_records_or_existing_records(self):
+        # New contacts must stay inactive even when a CSV explicitly says Enabled=yes.
+        raw=("Name,Username,Enabled,Opt In\n"
+             "New Contact,@new_inactive_csv,yes,yes\n").encode()
+        result=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf},
+            files={"file":("contacts.csv",raw,"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(result.status_code,303)
+        with core.database() as db:
+            contact=db.execute(
+                "SELECT id,enabled,consent FROM contacts WHERE username='@new_inactive_csv'"
+            ).fetchone()
+            self.assertIsNotNone(contact)
+            self.assertEqual((contact["enabled"],contact["consent"]),(0,1))
+            contact_id=contact["id"]
+            db.commit()
+        # Deliberately activate through the same action as the page switch.
+        toggled=self.http.post(
+            f"/contacts/{contact_id}/status",
+            data={"csrf":self.csrf,"action":"activate"},
+            follow_redirects=False,
+        )
+        self.assertEqual(toggled.status_code,303)
+        result=self.http.post(
+            "/contacts/import",data={"csrf":self.csrf},
+            files={"file":("contacts.csv",raw,"text/csv")},
+            follow_redirects=False,
+        )
+        self.assertEqual(result.status_code,303)
+        with core.database() as db:
+            row=db.execute("SELECT id,enabled,consent FROM contacts WHERE id=?",(contact_id,)).fetchone()
+            self.assertEqual((row["enabled"],row["consent"]),(1,1))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
 
     def test_csv_over_thousand_rows_is_not_silently_truncated(self):
         raw="Name,Telegram User ID,Telegram Group\n"+"".join(
@@ -530,7 +567,7 @@ class DirectGroupImportTests(unittest.TestCase):
         with core.database() as db:
             contact=db.execute("SELECT id,archived,enabled,consent FROM contacts "
                                "WHERE owner_id=?",(self.owner_id,)).fetchone()
-            self.assertEqual(tuple(contact),(cid,0,1,0))
+            self.assertEqual(tuple(contact),(cid,0,0,0))
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],1)
             self.assertEqual(core.contact_groups(db,self.owner_id)[0]["total"],1)
             audit=db.execute("SELECT previous_consent,new_consent FROM "

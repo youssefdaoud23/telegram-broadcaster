@@ -1,5 +1,14 @@
 # Telegram Broadcaster - Status and plan
 
+## Imported contacts inactive-by-default (2026-11-22)
+- [x] Direct Telegram scan imports create new records with enabled=0.
+- [x] CSV imports create records with enabled=0 even when Enabled=yes appears in the input.
+- [x] Reimported archived contacts are restored with enabled=0, consent=0 and preserved IDs/history.
+- [x] Existing active or inactive contacts preserve their user-chosen status on subsequent imports.
+- [x] Update import-page wording and regression tests.
+- [ ] Verify complete CI tests and fresh-install Docker smoke.
+- [ ] Deploy only after backup and verifying no active broadcasts.
+
 ## Contact management UI and instant filtering (2026-11-22)
 
 - [x] Replace cramped search row with full-width search and a group filter that update as the user types/selects.
@@ -15,7 +24,7 @@
 ## Archived contact re-import recovery (2026-11-22)
 - [x] Reproduce the bug: removed contacts are soft-archived, so subsequent direct imports skip every matching member.
 - [x] Restore matching archived contacts only on explicit scan or CSV import, reusing their original IDs and preserving previous groups/history.
-- [x] Reset restored records to consent=0 and enabled=1; audit transitions from previously opted-in records.
+- [x] Reset restored records to consent=0 and enabled=0; audit transitions from previously opted-in records.
 - [x] Preserve matching identity safeguards and owner isolation; do not revive conflicting records.
 - [x] Report restored counts separately from new/linked/already/skipped.
 - [x] Document restoration on import pages and confirmation prompt.
@@ -27,7 +36,7 @@
 - [x] Use one owner-scoped, conflict-aware contact matcher for both CSV and direct Telegram scan imports.
 - [x] Link recognized existing contacts to requested groups; preserve all unrelated memberships and consent/disabled flags.
 - [x] Allow manual CSV import into a named new/existing group and emit Telegram Group metadata in scan CSV exports.
-- [x] Honor Enabled during CSV creation and preserve existing active-contact settings.
+- [x] Ignore inbound Enabled during CSV creation (always Inactive) and preserve existing contact settings.
 - [x] Explicit re-import can safely restore archived matches without granting consent.
 - [x] Stop silently truncating CSV files after 1,000 rows; reject more than 5,000 before any database writes.
 - [x] Report created, linked, unchanged, skipped and group creation counts.
