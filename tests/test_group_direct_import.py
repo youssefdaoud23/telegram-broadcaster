@@ -546,8 +546,8 @@ class DirectGroupImportTests(unittest.TestCase):
             )
             db.execute("UPDATE contacts SET archived=1 WHERE id=?",(old,))
             db.commit()
-        raw=("Name,Username,Telegram User ID,Telegram Group\\n"
-             "Changed,@archived_user1,999999999,Should Not Be Created\\n")
+        raw=("Name,Username,Telegram User ID,Telegram Group\n"
+             "Changed,@archived_user1,999999999,Should Not Be Created\n")
         response=self.http.post(
             "/contacts/import",data={"csrf":self.csrf},
             files={"file":("conflict.csv",raw.encode(),"text/csv")},
