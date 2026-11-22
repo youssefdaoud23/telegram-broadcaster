@@ -310,14 +310,12 @@ def contacts_page(request: Request, q: str = "", group_id: int = 0):
         rows = core.active_contact_rows(db,user["admin_id"])
         groups=core.contact_groups(db,user["admin_id"])
         membership=core.contact_group_map(db,user["admin_id"])
-    if group_id:
-        if not any(g["id"]==group_id for g in groups):
-            raise HTTPException(404,"Contact group not found")
-        rows=[c for c in rows if group_id in membership.get(c["id"],set())]
-    if q:
-        term = q.lower()[:120]
-        rows = [x for x in rows if any(term in str(x[k]).lower() for k in ("name","username","phone","user_id","notes"))]
-    return render(request, "contacts.html", title="Contacts", contacts=rows, query=q,
+    if group_id and not any(g["id"] == group_id for g in groups):
+        raise HTTPException(404, "Contact group not found")
+    # Render the workspace's complete contact set so the browser can filter
+    # instantly across both names and groups, even after opening a group link.
+    # No contacts belonging to another workspace are loaded.
+    return render(request, "contacts.html", title="Contacts", contacts=rows, query=q[:120],
                   group_id=group_id, groups=groups, membership=membership)
 
 
