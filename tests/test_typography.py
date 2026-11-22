@@ -6,13 +6,14 @@ from pathlib import Path
 class TypographyTests(unittest.TestCase):
     def test_no_unicode_em_dash(self):
         root=Path(__file__).resolve().parents[1]
-        directories=[root/"broadcaster",root/"tests"]
+        directories=[root/"broadcaster",root/"tests",root/"docs",
+                     root/"scripts",root/".github"]
         files=[]
         for folder in directories:
             files.extend(
                 p for p in folder.rglob("*")
                 if p.is_file() and "__pycache__" not in p.parts
-                and p.suffix in {".py",".html",".css",".js",".md"}
+                and p.suffix in {".py",".html",".css",".js",".md",".yaml",".yml"}
             )
         files.extend(root.glob("*.md"))
         files.extend([root/"compose.yaml",root/".env.example",root/"Dockerfile"])

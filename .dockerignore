@@ -10,3 +10,8 @@ __pycache__
 *.log
 tests
 .github
+
+# Development dependencies and documentation should not enter runtime builds
+.deps
+.venv
+docs

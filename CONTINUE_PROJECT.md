@@ -37,3 +37,18 @@ Before making any changes:
     or mark them opted in. Overlapping selected groups are unioned to
     distinct contact IDs before drafting a message. Use SQLite online
     backup and verify no sending jobs before rebuilding production.
+
+
+16. General public docs must support third-party fresh installs without
+    assuming /opt, n8n, Cloudflare or a particular domain. Use
+    scripts/configure.py with Docker Compose. Never silently swap storage
+    from bind mount to named volume for an existing installation.
+17. Preserve the original /opt production .env, encryption key, SQLite
+    and Telegram sessions until an authorized verified migration.
+    Compose default port fallback preserves legacy production behavior,
+    but new .env.example defaults to localhost.
+18. Keep README and docs/INSTALL.md, CONFIGURATION.md, OPERATIONS.md,
+    SECURITY.md, TROUBLESHOOTING.md current. GitHub CI never sends
+    real Telegram messages or accesses existing account data.
+19. No LICENSE has been selected by the maintainer. Do not silently grant
+    license rights without explicit approval.

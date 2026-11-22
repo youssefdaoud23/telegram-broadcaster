@@ -1,0 +1,10 @@
+# Docker-managed storage for NEW installs.
+# Usage: docker compose -f compose.yaml -f compose.volume.yaml up -d --build
+# Existing ./data installations must migrate data before switching modes.
+services:
+  broadcaster:
+    volumes:
+      - broadcaster_data:/data
+
+volumes:
+  broadcaster_data:

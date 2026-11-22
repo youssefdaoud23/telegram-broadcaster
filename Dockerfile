@@ -3,7 +3,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
- && useradd --uid 10001 --create-home broadcaster
+ && useradd --uid 10001 --create-home broadcaster \
+ && install -d -m 0700 -o 10001 -g 10001 /data
 COPY broadcaster ./broadcaster
 USER 10001:10001
 EXPOSE 8080

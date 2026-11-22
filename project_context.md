@@ -225,3 +225,32 @@ Do not confuse application contact groups with Telegram chat group-export.
 
 Production /opt source and SQLite data are untouched until authorized
 backup and deployment. No Neon credentials, new Docker service or Mem0.
+
+
+## Reusable deployment package (2026-11-22)
+
+The public repository is being made portable for fresh installations
+on Docker Engine + Compose v2 hosts, including Docker Desktop.
+Do not assume /opt or n8n when giving general installation guidance.
+README is the landing page. docs/INSTALL.md, CONFIGURATION.md,
+OPERATIONS.md, SECURITY.md, TROUBLESHOOTING.md are public help pages.
+docs/MAINTAINER_MIGRATION.md is ONLY for the original n8n-to-/opt
+migration case. This user's actual production remains /opt/telegram-broadcaster.
+
+scripts/configure.py is a Python-stdlib-only new-install initializer.
+It generates an exclusive .env with a random Fernet encryption key,
+refuses to overwrite existing config, defaults to localhost and sending
+disabled, validates host port and HTTPS public origin, and prepares data/.
+Compose interpolates BROADCASTER_BIND_IP/BROADCASTER_PORT with legacy
+0.0.0.0:8789 fallbacks to preserve existing private .env behavior.
+Fresh .env.example sets BROADCASTER_BIND_IP=127.0.0.1. The optional
+compose.volume.yaml replaces ./data with a Docker-managed volume;
+selecting it on existing installs WITHOUT migrating data would create
+a new, empty database. Docker image creates /data owned by 10001.
+Compose healthcheck uses Python stdlib against /health.
+
+.github/workflows/ci.yml runs offline tests and a fresh container health
+smoke test with sending disabled. Do not deploy, restart or touch /opt
+production as a side effect of editing the public installation guide.
+No LICENSE existed at audit; the maintainer must choose a software
+license before third parties have explicit use/redistribution rights.

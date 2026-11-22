@@ -1,0 +1,75 @@
+name: Tests and fresh-install smoke check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt 'httpx>=0.27,<1'
+
+      - name: Run all offline tests
+        run: |
+          python -m compileall -q broadcaster tests scripts
+          python -m unittest discover -s tests -v
+
+      - name: Prepare a brand-new local installation
+        run: |
+          python scripts/configure.py
+          docker compose config --quiet
+          docker compose -f compose.yaml -f compose.volume.yaml config --quiet
+
+      - name: Build fresh Docker image
+        run: docker compose build broadcaster
+
+      - name: Prepare bind-mounted data permissions
+        run: docker compose run --rm --no-deps --user root --cap-add CHOWN broadcaster sh -c 'chown 10001:10001 /data'
+
+      - name: Initialize empty database
+        run: docker compose run --rm --no-deps broadcaster python -m broadcaster.cli init-db
+
+      - name: Start website (sending remains disabled)
+        run: docker compose up -d
+
+      - name: Confirm health endpoint and no sends enabled
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+          for i in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8789/health", timeout=3) as response:
+                      if response.status == 200:
+                          data = json.loads(response.read().decode())
+                          assert data.get("status") == "ok", data
+                          print("PASS: fresh Docker deployment serves /health")
+                          break
+              except Exception:
+                  time.sleep(2)
+          else:
+              raise SystemExit("HTTP health endpoint did not recover")
+          PY
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --tail=120 broadcaster || true
+
+      - name: Stop only the CI test project
+        if: always()
+        run: docker compose down --remove-orphans || true

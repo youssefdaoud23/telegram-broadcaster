@@ -195,3 +195,22 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
       rebuild only broadcaster.
 - [ ] Verify contact counts and group UI after schema migration, without
       sending any real Telegram messages.
+
+
+## Generic self-hosted deployment (2026-11-22)
+
+- [x] Audit Compose, Dockerfile, .env.example, CLI, and docs.
+- [x] Support custom host port and bind IP, preserving existing fallback.
+- [x] Default NEW installations to localhost and disabled sending.
+- [x] Add Python standard-library-only configuration with a unique secret,
+      no-overwrite guard, and HTTPS origin validation.
+- [x] Add optional Docker-managed volume configuration for new installs.
+- [x] Add /health container healthcheck.
+- [x] Write generic README, installation, configuration, operations,
+      privacy, troubleshooting, and legacy migration docs.
+- [x] Add GitHub Actions unit and clean-install smoke test workflow.
+- [x] Verify default/named-volume Compose config and offline installer.
+- [ ] Observe first GitHub Actions Docker smoke on the published commit.
+- [ ] Maintainer must decide and publish an explicit software license.
+- [ ] Do not deploy to existing /opt installation without separate approval,
+      database backup, and no-active-sends checks.
