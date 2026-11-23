@@ -4,13 +4,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import re
 import time
 from pathlib import Path
 
 from telethon import TelegramClient, errors, types
 
-from .core import database, decrypt, encrypt, now
+from .core import database, decrypt, encrypt, now, send_delay_range
 
 log = logging.getLogger(__name__)
 _locks: dict[str, asyncio.Lock] = {}
@@ -298,6 +299,7 @@ async def dispatch(campaign_id: str):
                 with database() as db:
                     items = db.execute("SELECT * FROM deliveries WHERE campaign_id=? ORDER BY id", (campaign_id,)).fetchall()
                 paused = False
+                delay_low, delay_high = send_delay_range()
                 for i, delivery in enumerate(items):
                     # A contact can opt out after campaign drafting. Recheck before each send.
                     with database() as db:
@@ -356,7 +358,7 @@ async def dispatch(campaign_id: str):
                             db.execute("UPDATE deliveries SET state='failed',error=?,updated_at=? WHERE id=?", (type(exc).__name__,now(),delivery["id"]))
                             db.commit()
                     if i < len(items)-1:
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(random.uniform(delay_low, delay_high))
                 with database() as db:
                     db.execute("UPDATE campaigns SET state=?, completed_at=? WHERE id=?", ("paused" if paused else "finished",now(),campaign_id))
                     db.commit()

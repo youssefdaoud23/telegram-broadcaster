@@ -35,6 +35,22 @@ def recipient_limit() -> int | None:
     return value
 
 
+def send_delay_range() -> tuple[float, float]:
+    """Seconds to wait between two messages: a random value in [min, max].
+
+    A varied pause looks less like a bot to Telegram's anti-spam checks than a
+    fixed one. Defaults to 3-6 s; SEND_DELAY_MIN_SECONDS/MAX_SECONDS override.
+    """
+    try:
+        low = float(os.getenv("SEND_DELAY_MIN_SECONDS", "").strip() or 3)
+        high = float(os.getenv("SEND_DELAY_MAX_SECONDS", "").strip() or 6)
+    except ValueError as exc:
+        raise ValueError("SEND_DELAY_MIN_SECONDS/SEND_DELAY_MAX_SECONDS must be numbers") from exc
+    if not 1 <= low <= high <= 600:
+        raise ValueError("Send delay needs 1 <= SEND_DELAY_MIN_SECONDS <= SEND_DELAY_MAX_SECONDS <= 600")
+    return low, high
+
+
 def db_path() -> Path:
     return Path(os.getenv("DATABASE_PATH", "/data/broadcaster.sqlite3"))
 

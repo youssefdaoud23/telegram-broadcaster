@@ -31,6 +31,7 @@ templates.env.filters["moment"] = (
 async def startup():
     core.encryption()  # Fail closed if encryption is not configured.
     core.recipient_limit()  # Validate optional operator limit before serving.
+    core.send_delay_range()  # Same for the delay between messages.
     core.init_db(recover_inflight=True)
 
 

@@ -26,7 +26,8 @@ class HardeningTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         keys = ("DATABASE_PATH", "APP_ENCRYPTION_KEY", "TELEGRAM_SESSION_DIR",
-                "SEND_ENABLED", "SEND_MAX_RECIPIENTS", "COOKIE_SECURE", "CLIENT_IP_HEADER")
+                "SEND_ENABLED", "SEND_MAX_RECIPIENTS", "COOKIE_SECURE", "CLIENT_IP_HEADER",
+                "SEND_DELAY_MIN_SECONDS", "SEND_DELAY_MAX_SECONDS")
         self.old = {k: os.environ.get(k) for k in keys}
         os.environ.update({
             "DATABASE_PATH": str(Path(self.temp.name) / "hardening.sqlite3"),
@@ -37,6 +38,8 @@ class HardeningTests(unittest.TestCase):
         })
         os.environ.pop("SEND_MAX_RECIPIENTS", None)
         os.environ.pop("CLIENT_IP_HEADER", None)
+        os.environ.pop("SEND_DELAY_MIN_SECONDS", None)
+        os.environ.pop("SEND_DELAY_MAX_SECONDS", None)
         core.init_db()
         core.create_admin("owner", "testpassword")
         with core.database() as db:
@@ -182,6 +185,36 @@ class HardeningTests(unittest.TestCase):
         state, rows = self._deliveries(campaign)
         self.assertEqual(state, "paused")
         self.assertEqual([r["state"] for r in rows], ["blocked", "pending"])
+
+    # --- random pause between messages -----------------------------------------
+
+    def test_send_delay_defaults_overrides_and_rejects_bad_values(self):
+        self.assertEqual(core.send_delay_range(), (3.0, 6.0))
+        os.environ["SEND_DELAY_MIN_SECONDS"] = "5"
+        os.environ["SEND_DELAY_MAX_SECONDS"] = "12.5"
+        self.assertEqual(core.send_delay_range(), (5.0, 12.5))
+        for low, high in (("abc", "6"), ("0", "6"), ("7", "6"), ("3", "601")):
+            with self.subTest(low=low, high=high):
+                os.environ["SEND_DELAY_MIN_SECONDS"] = low
+                os.environ["SEND_DELAY_MAX_SECONDS"] = high
+                with self.assertRaises(ValueError):
+                    core.send_delay_range()
+
+    def test_pause_between_messages_is_random_within_range(self):
+        campaign = self._queued_campaign(4)
+        fake = self._fake_sender(None)
+        fake.send_message = AsyncMock(return_value=SimpleNamespace(id=1))
+        sleep = AsyncMock()
+        os.environ["SEND_ENABLED"] = "true"
+        with patch("broadcaster.telegram.new_client", return_value=fake), \
+                patch("broadcaster.telegram.asyncio.sleep", sleep):
+            asyncio.run(telegram.dispatch(campaign))
+        state, rows = self._deliveries(campaign)
+        self.assertEqual(state, "finished")
+        self.assertEqual([r["state"] for r in rows], ["sent"] * 4)
+        waits = [c.args[0] for c in sleep.await_args_list]
+        self.assertEqual(len(waits), 3)  # between messages only, not after the last
+        self.assertTrue(all(3 <= w <= 6 for w in waits), waits)
 
     # --- #5: a send that may have gone through is "unknown", never "failed" -----
 
