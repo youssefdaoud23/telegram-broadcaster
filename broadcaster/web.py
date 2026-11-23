@@ -1334,4 +1334,5 @@ def campaign_status(request: Request, campaign_id: str):
     if campaign is None:raise HTTPException(404,"Campaign not found")
     return {"id":campaign_id,"state":campaign["state"],"total":len(deliveries),
             "sent":sum(d["state"]=="sent" for d in deliveries),
-            "failed":sum(d["state"] in {"failed","blocked"} for d in deliveries)}
+            "failed":sum(d["state"] in {"failed","blocked"} for d in deliveries),
+            "unknown":sum(d["state"]=="unknown" for d in deliveries)}

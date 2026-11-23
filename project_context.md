@@ -423,7 +423,11 @@ with the number) and write a contact_form row to contact_consent_events
 for any grant or withdrawal. CSV Opt In/Consent still imports as before.
 telegram.dispatch
 treats errors.FloodError and errors.PeerFloodError alike: mark the
-delivery blocked, pause the campaign, leave the rest pending.
+delivery blocked, pause the campaign, leave the rest pending. An error
+after send_message starts that is not a definite Telegram refusal
+(connection drop, timeout, RPC 500/503) marks the delivery unknown and
+also pauses; the outer handler turns a leftover sending delivery into
+unknown. failed therefore always means nothing was delivered.
 Sign-in throttling lives in login_failures(username, ip); web.client_ip
 reads CLIENT_IP_HEADER only from private/loopback peers. Failed sign-ins
 redirect with the attempts left, and a locked address sees the minutes

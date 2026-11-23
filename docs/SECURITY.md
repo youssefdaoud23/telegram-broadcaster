@@ -46,7 +46,7 @@ permissions or privacy restrictions. No phone lookup is performed.
 
 `SEND_ENABLED=false` is the safest default. Sending is a separate, user-confirmed action after reviewing recipients. Only eligible opted-in contacts can be selected. Contacts in multiple groups are deduplicated per campaign.
 
-Do not use the system to send unsolicited bulk private messages. If Telegram answers a send with a flood wait or a spam restriction (`PEER_FLOOD`), the broadcast is paused immediately and the remaining recipients stay pending; it never keeps sending to the rest of the list. When a campaign is interrupted, an unknown delivery state is **not automatically retried**; review history and the Telegram conversation before deliberately reusing a previous broadcast.
+Do not use the system to send unsolicited bulk private messages. If Telegram answers a send with a flood wait or a spam restriction (`PEER_FLOOD`), the broadcast is paused immediately and the remaining recipients stay pending; it never keeps sending to the rest of the list. If the connection drops or times out while a message is being sent, that recipient is marked unknown (Telegram may have delivered it), never failed, and the broadcast pauses the same way; failed always means nothing was delivered. When a campaign is interrupted, an unknown delivery state is **not automatically retried**; review history and the Telegram conversation before deliberately reusing a previous broadcast.
 
 Ticking or unticking consent on a single contact's add or edit form is also
 written to the consent history (no reason is required there).

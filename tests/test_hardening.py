@@ -183,6 +183,70 @@ class HardeningTests(unittest.TestCase):
         self.assertEqual(state, "paused")
         self.assertEqual([r["state"] for r in rows], ["blocked", "pending"])
 
+    # --- #5: a send that may have gone through is "unknown", never "failed" -----
+
+    def _run(self, fake, campaign):
+        os.environ["SEND_ENABLED"] = "true"
+        with patch("broadcaster.telegram.new_client", return_value=fake), \
+                patch("broadcaster.telegram.asyncio.sleep", AsyncMock()):
+            asyncio.run(telegram.dispatch(campaign))
+        return self._deliveries(campaign)
+
+    def test_connection_drop_mid_send_is_unknown_and_pauses(self):
+        for exc in (ConnectionError("reset"), asyncio.TimeoutError(), OSError("net"),
+                    errors.ServerError(request=None, message="INTERNAL"),
+                    errors.TimedOutError(request=None, message="Timeout")):
+            with self.subTest(exc=type(exc).__name__):
+                campaign = self._queued_campaign(3)
+                fake = self._fake_sender(exc)
+                state, rows = self._run(fake, campaign)
+                self.assertEqual(fake.send_message.await_count, 1)
+                self.assertEqual(state, "paused")
+                self.assertEqual(rows[0]["state"], "unknown")
+                self.assertIn("check the chat", rows[0]["error"])
+                self.assertEqual([r["state"] for r in rows[1:]], ["pending", "pending"])
+                with core.database() as db:
+                    db.execute("DELETE FROM contacts")
+                    db.commit()
+
+    def test_telegram_refusal_is_failed_and_continues(self):
+        campaign = self._queued_campaign(2)
+        fake = self._fake_sender(errors.UserIsBlockedError(request=None))
+        state, rows = self._run(fake, campaign)
+        self.assertEqual(fake.send_message.await_count, 2)
+        self.assertEqual(state, "finished")
+        self.assertEqual([r["state"] for r in rows], ["failed", "failed"])
+
+    def test_lookup_error_before_sending_is_failed(self):
+        campaign = self._queued_campaign(2)
+        fake = self._fake_sender(AssertionError("send must not be called"))
+        fake.get_entity = AsyncMock(side_effect=ConnectionError("reset"))
+        state, rows = self._run(fake, campaign)
+        self.assertEqual(fake.send_message.await_count, 0)
+        self.assertEqual(state, "finished")
+        self.assertEqual([r["state"] for r in rows], ["failed", "failed"])
+
+    def test_sender_crash_mid_send_leaves_unknown_not_sending(self):
+        campaign = self._queued_campaign(2)
+        fake = self._fake_sender(ConnectionError("reset"))
+        # Something breaks while the first delivery is still marked "sending".
+        with patch("broadcaster.telegram._definitely_not_sent", side_effect=RuntimeError("boom")):
+            state, rows = self._run(fake, campaign)
+        self.assertEqual(state, "failed")
+        self.assertEqual(rows[0]["state"], "unknown")
+        self.assertEqual(rows[1]["state"], "failed")
+
+    def test_unknown_is_not_offered_as_failed_on_reuse(self):
+        campaign = self._queued_campaign(1)
+        self._run(self._fake_sender(ConnectionError("reset")), campaign)
+        page = self.http.get(f"/campaigns/{campaign}").text
+        self.assertIn("Unknown - check the chat", page)
+        self.assertIn("Sending was paused", page)
+        reuse = self.http.get(f"/compose?from_campaign={campaign}").text
+        self.assertIn('data-previous-state="unknown"', reuse)
+        api = self.http.get(f"/api/campaigns/{campaign}").json()
+        self.assertEqual((api["failed"], api["unknown"]), (0, 1))
+
     # --- #4: lockout is per address, not global per username --------------------
 
     def test_guesses_from_one_address_do_not_lock_out_another(self):

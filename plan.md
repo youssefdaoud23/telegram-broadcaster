@@ -353,5 +353,15 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
       opt-in trusted client-IP header for proxies/tunnels.
 - [x] Login page shows attempts left and minutes until unlock.
 - [x] Offline tests for all of the above (tests/test_hardening.py).
-- [ ] Set CLIENT_IP_HEADER=CF-Connecting-IP in production .env on deploy.
-- [ ] CI green, merge to main, deploy after backup with no active sends.
+- [x] Set CLIENT_IP_HEADER=CF-Connecting-IP in production .env on deploy.
+- [x] CI green, merge to main, deploy after backup with no active sends.
+
+## Ambiguous send outcomes (2026-11-23)
+
+- [x] A send that errors after the message may have left (connection drop,
+      timeout, Telegram 500/503) is recorded as unknown, not failed, and
+      the broadcast pauses with the rest pending. Only a definite Telegram
+      refusal (any other RPC error) or a lookup error is failed.
+- [x] A sender crash while a delivery is marked sending turns it unknown.
+- [x] Campaign page shows an Unknown count and a paused explanation;
+      /api/campaigns/{id} reports unknown.

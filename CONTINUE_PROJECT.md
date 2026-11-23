@@ -151,3 +151,10 @@ Before making any changes:
     CF-Connecting-IP) is honoured only from RFC1918/ULA/loopback peers.
     Production publishes port 8789 only on 172.19.0.1 (BROADCASTER_BIND_IP),
     the Cloudflare tunnel network's gateway, which the tunnel route uses.
+26. Ambiguous send outcomes (2026-11-23): dispatch marks a delivery
+    failed only when nothing was sent (lookup error, or a Telegram RPC
+    refusal other than ServerError/TimedOutError; see
+    telegram._definitely_not_sent). Anything else after send_message
+    starts is unknown and pauses the broadcast, because the "Failed /
+    blocked" reuse preset must never pick someone who may already have
+    the message.

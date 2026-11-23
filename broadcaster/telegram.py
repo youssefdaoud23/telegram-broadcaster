@@ -240,6 +240,17 @@ async def refresh_connected_accounts(account_ids: list[str], *, force: bool = Fa
     return sorted(set(message for message in results if message))
 
 
+def _definitely_not_sent(exc: BaseException) -> bool:
+    """True only when Telegram itself answered and refused the message.
+
+    Any RPC error is a reply from Telegram, so nothing was delivered, except
+    its internal-error (500) and timeout (503) replies, which can arrive after
+    the message went through.
+    """
+    return isinstance(exc, errors.RPCError) and not isinstance(
+        exc, (errors.ServerError, errors.TimedOutError))
+
+
 async def dispatch(campaign_id: str):
     """Run once; no recovery/resend on restart to avoid duplicate messages."""
     with database() as db:
@@ -301,12 +312,14 @@ async def dispatch(campaign_id: str):
                             continue
                         db.execute("UPDATE deliveries SET state='sending',updated_at=? WHERE id=? AND state='pending'", (now(),delivery["id"]))
                         db.commit()
+                    attempted = False  # True once the message may have left this server
                     try:
                         target = delivery["destination"]
                         lookup = int(target) if target.isdigit() else target
                         entity = await client.get_entity(lookup)
                         if not isinstance(entity, types.User) or entity.deleted:
                             raise TelegramProblem("Telegram user is not accessible")
+                        attempted = True
                         msg = await client.send_message(entity, campaign["message"])
                         with database() as db:
                             db.execute("UPDATE deliveries SET state='sent',message_id=?,error='',updated_at=? WHERE id=?", (msg.id,now(),delivery["id"]))
@@ -325,6 +338,17 @@ async def dispatch(campaign_id: str):
                         break
                     except Exception as exc:
                         # Do not include PII or remote exception text in persistent logs.
+                        if attempted and not _definitely_not_sent(exc):
+                            # Connection drop or timeout mid-send: Telegram may already
+                            # have delivered it. Never call that "failed" (it would be
+                            # offered for resending), and stop so the rest stay pending.
+                            with database() as db:
+                                db.execute("UPDATE deliveries SET state='unknown',error=?,updated_at=? WHERE id=?",
+                                           (f"Outcome unknown ({type(exc).__name__}); check the chat before sending again",
+                                            now(),delivery["id"]))
+                                db.commit()
+                            paused = True
+                            break
                         with database() as db:
                             db.execute("UPDATE deliveries SET state='failed',error=?,updated_at=? WHERE id=?", (type(exc).__name__,now(),delivery["id"]))
                             db.commit()
@@ -342,6 +366,8 @@ async def dispatch(campaign_id: str):
             with database() as db:
                 db.execute("UPDATE campaigns SET state='failed',completed_at=? WHERE id=?", (now(),campaign_id))
                 db.execute("UPDATE deliveries SET state='failed',error='Sender unavailable',updated_at=? WHERE campaign_id=? AND state='pending'", (now(),campaign_id))
+                # A send cut off by this error may or may not have reached Telegram.
+                db.execute("UPDATE deliveries SET state='unknown',error='Interrupted before delivery status was confirmed',updated_at=? WHERE campaign_id=? AND state='sending'", (now(),campaign_id))
                 db.commit()
 
 

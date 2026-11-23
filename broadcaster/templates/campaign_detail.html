@@ -11,12 +11,14 @@
   <a href="/compose?from_campaign={{ campaign['id'] }}" class="btn btn-outline">Reuse and edit as a new broadcast</a>
 </div>
 <div class="divider-line"></div>
-<div class="detail-stats"><div><strong>{{ campaign['total'] }}</strong><small>Recipients</small></div><div><strong>{{ counts.get('sent',0) }}</strong><small>Sent</small></div><div><strong>{{ counts.get('failed',0) + counts.get('blocked',0) }}</strong><small>Failed / blocked</small></div></div>
+<div class="detail-stats"><div><strong>{{ campaign['total'] }}</strong><small>Recipients</small></div><div><strong>{{ counts.get('sent',0) }}</strong><small>Sent</small></div><div><strong>{{ counts.get('failed',0) + counts.get('blocked',0) }}</strong><small>Failed / blocked</small></div>{% if counts.get('unknown',0) %}<div><strong>{{ counts.get('unknown',0) }}</strong><small>Unknown - check the chat</small></div>{% endif %}</div>
 {% if campaign['state']=='draft' %}
 <div class="alert alert-neutral">Review the message and recipients. Sending requires one click below-no confirmation phrase.</div>
 <form method="post" action="/campaigns/{{ campaign['id'] }}/send" data-confirm="Send this message separately to the listed opted-in recipients?"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-primary" {% if not send_enabled %}disabled title="Sending disabled by server settings"{% endif %}>Send {{ campaign['total'] }} private message{% if campaign['total']!=1 %}s{% endif %}</button></form>
 {% if not send_enabled %}<small class="subtle">Sending is disabled in server settings. Drafting and previewing are available.</small>{% endif %}
 {% elif campaign['state'] in ['queued','sending'] %}<div class="alert alert-neutral">Delivery is in progress. This page refreshes automatically.</div><span id="campaign-refresh" data-active="true"></span>
+{% elif campaign['state']=='paused' %}
+<div class="alert alert-warning">Sending was paused to protect the sender account. Recipients still marked pending were not messaged; use "Reuse and edit as a new broadcast" and choose "Not yet attempted" to continue later.{% if counts.get('unknown',0) %} Anyone marked unknown may already have the message: check their chat before sending to them again.{% endif %}</div>
 {% elif campaign['state']=='interrupted' %}
 <div class="alert alert-warning">Delivery was interrupted. Messages with unknown, sent, failed or blocked status are never automatically retried.</div>
 {% if retry_id %}
