@@ -253,10 +253,12 @@ Read the [security guide](docs/SECURITY.md) before making the service reachable 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install -r requirements.txt "httpx>=0.27,<1"
+python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 docker compose config --quiet
 ```
+
+`requirements.txt` lists the allowed version ranges; `requirements.lock` pins the exact versions the Docker image installs, and `requirements-dev.txt` adds the test client. After changing a range, regenerate the lock as described at the top of `requirements.lock`.
 
 For Windows PowerShell, activate the virtual environment using `.venv\Scripts\Activate.ps1` or run the interpreter inside `.venv` directly. Tests use temporary local databases and mocked Telegram calls; they do not send real messages.
 

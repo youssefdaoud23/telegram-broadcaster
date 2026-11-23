@@ -1,7 +1,6 @@
 """SQLite persistence and security primitives. No Telegram secrets in Git."""
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
 import os
@@ -40,10 +39,24 @@ def db_path() -> Path:
     return Path(os.getenv("DATABASE_PATH", "/data/broadcaster.sqlite3"))
 
 
+class _ClosingConnection(sqlite3.Connection):
+    """``with database() as db:`` commits (or rolls back on error), then closes.
+
+    A plain sqlite3 connection only commits on ``with`` exit and stays open
+    until garbage collection, which leaks file handles under load.
+    """
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            return super().__exit__(exc_type, exc, tb)
+        finally:
+            self.close()
+
+
 def database() -> sqlite3.Connection:
     location = db_path()
     location.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    db = sqlite3.connect(str(location), timeout=20)
+    db = sqlite3.connect(str(location), timeout=20, factory=_ClosingConnection)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys=ON")
     db.execute("PRAGMA busy_timeout=10000")
@@ -622,16 +635,7 @@ def bulk_update_group_members(db: sqlite3.Connection, owner_id: int,
         (group_id, owner_id),
     ).fetchone():
         raise ValueError("Selected group not found in your workspace")
-    pending = set(contact_ids)
-    for start in range(0, len(contact_ids), 450):
-        chunk = contact_ids[start:start+450]
-        placeholders = ",".join("?" for _ in chunk)
-        matches = db.execute(
-            f"SELECT id FROM contacts WHERE owner_id=? AND archived=0 "
-            f"AND id IN ({placeholders})", (owner_id, *chunk),
-        ).fetchall()
-        pending.difference_update(row["id"] for row in matches)
-    if pending:
+    if _missing_contacts(db, owner_id, contact_ids):
         raise ValueError("Some selected contacts are unavailable in your workspace")
     before = db.total_changes
     if remove:
@@ -648,6 +652,28 @@ def bulk_update_group_members(db: sqlite3.Connection, owner_id: int,
     return db.total_changes - before
 
 
+SQL_ID_CHUNK = 450  # stays well under SQLite's bound-parameter limit
+
+
+def _id_chunks(ids: list[int]):
+    """Yield (chunk, "?,?,...") pairs small enough for one ``IN (...)`` query."""
+    for start in range(0, len(ids), SQL_ID_CHUNK):
+        chunk = ids[start:start + SQL_ID_CHUNK]
+        yield chunk, ",".join("?" * len(chunk))
+
+
+def _missing_contacts(db: sqlite3.Connection, owner_id: int, ids: list[int]) -> set[int]:
+    """IDs that are not live (unarchived) contacts in this owner's workspace."""
+    missing = set(ids)
+    for chunk, holders in _id_chunks(ids):
+        rows = db.execute(
+            f"SELECT id FROM contacts WHERE owner_id=? AND archived=0 "
+            f"AND id IN ({holders})", (owner_id, *chunk),
+        ).fetchall()
+        missing.difference_update(row["id"] for row in rows)
+    return missing
+
+
 def _validate_selected_contacts(db: sqlite3.Connection, owner_id: int,
                                 ids: list[int], max_count: int = 5000) -> None:
     if not 1 <= len(ids) <= max_count:
@@ -656,16 +682,7 @@ def _validate_selected_contacts(db: sqlite3.Connection, owner_id: int,
         isinstance(cid, bool) or not isinstance(cid, int) or cid <= 0 for cid in ids
     ):
         raise ValueError("Invalid or duplicated contact selection")
-    missing = set(ids)
-    for start in range(0, len(ids), 450):
-        chunk = ids[start:start+450]
-        holders = ",".join("?" for _ in chunk)
-        rows = db.execute(
-            f"SELECT id FROM contacts WHERE owner_id=? AND archived=0 "
-            f"AND id IN ({holders})", (owner_id, *chunk)
-        ).fetchall()
-        missing.difference_update(row["id"] for row in rows)
-    if missing:
+    if _missing_contacts(db, owner_id, ids):
         raise ValueError("One or more contacts no longer exist in your workspace")
 
 
@@ -679,9 +696,7 @@ def bulk_set_contacts_enabled(
     _validate_selected_contacts(db, owner_id, contact_ids)
     updated = 0
     target = int(enabled)
-    for start in range(0, len(contact_ids), 450):
-        chunk = contact_ids[start:start + 450]
-        holders = ",".join("?" for _ in chunk)
+    for chunk, holders in _id_chunks(contact_ids):
         result = db.execute(
             f"UPDATE contacts SET enabled=?,updated_at=? WHERE owner_id=? "
             f"AND archived=0 AND enabled<>? AND id IN ({holders})",
@@ -723,9 +738,7 @@ def bulk_archive_contacts(db: sqlite3.Connection, owner_id: int,
     db.execute("BEGIN IMMEDIATE")
     _validate_selected_contacts(db, owner_id, contact_ids)
     archived = 0
-    for start in range(0, len(contact_ids), 450):
-        chunk = contact_ids[start:start+450]
-        holders = ",".join("?" for _ in chunk)
+    for chunk, holders in _id_chunks(contact_ids):
         result = db.execute(
             f"UPDATE contacts SET archived=1,enabled=0,updated_at=? "
             f"WHERE owner_id=? AND archived=0 AND id IN ({holders})",
@@ -818,9 +831,7 @@ def bulk_update_contact_consent(
         assert contact_ids is not None
         _validate_selected_contacts(db,owner_id,contact_ids)
         rows=[]
-        for start in range(0,len(contact_ids),450):
-            chunk=contact_ids[start:start+450]
-            holders=",".join("?" for _ in chunk)
+        for chunk,holders in _id_chunks(contact_ids):
             rows+=db.execute(
                 f"SELECT id,consent FROM contacts WHERE owner_id=? AND archived=0 "
                 f"AND id IN ({holders})",(owner_id,*chunk),
@@ -854,18 +865,8 @@ def set_group_members(db: sqlite3.Connection, owner_id: int,
         raise ValueError("Invalid or duplicated contact selection")
     if any(not isinstance(cid,int) or cid<=0 for cid in contact_ids):
         raise ValueError("Invalid contact selection")
-    if contact_ids:
-        unique_ids=set(contact_ids)
-        for start in range(0,len(contact_ids),500):
-            chunk=contact_ids[start:start+500]
-            placeholders=",".join("?" for _ in chunk)
-            results=db.execute(
-                f"SELECT id FROM contacts WHERE owner_id=? AND archived=0 AND id IN ({placeholders})",
-                (owner_id,*chunk),
-            ).fetchall()
-            for item in results:unique_ids.discard(item["id"])
-        if unique_ids:
-            raise ValueError("A selected contact does not exist in your workspace")
+    if _missing_contacts(db,owner_id,contact_ids):
+        raise ValueError("A selected contact does not exist in your workspace")
     db.execute("DELETE FROM contact_group_members WHERE group_id=?", (group_id,))
     for contact_id in sorted(contact_ids):
         db.execute(
@@ -875,7 +876,6 @@ def set_group_members(db: sqlite3.Connection, owner_id: int,
 
 
 def insert_contact(db: sqlite3.Connection, data: dict[str,str], owner_id: int, *, consent: bool=False, enabled: bool=True) -> int:
-    dest = data["username"] or data["phone"] or data["user_id"]
     # De-duplicate by any supplied identifier, case insensitive for usernames.
     dup = db.execute("""
         SELECT id FROM contacts WHERE owner_id=? AND archived=0 AND

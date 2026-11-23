@@ -188,20 +188,7 @@ async def verify_connected(account_id: str, *, cache_seconds: int = 0) -> str:
 
             async def check() -> str:
                 await client.connect()
-                if not await client.is_user_authorized():
-                    _mark_revoked(account_id)
-                    raise TelegramProblem(SESSION_EXPIRED_MESSAGE)
-                me = await client.get_me()
-                if me is None:
-                    _mark_revoked(account_id)
-                    raise TelegramProblem(SESSION_EXPIRED_MESSAGE)
-                actual = ("@" + me.username).lower() if me.username else ""
-                if (row["expected_username"] and row["expected_username"].lower() != actual) or (
-                    row["username"] and row["username"].lower() != actual
-                ):
-                    # Never replace a stored identity with another user.
-                    _mark_revoked(account_id)
-                    raise TelegramProblem("The Telegram session identity changed. Reconnect this account.")
+                me = await confirm_identity(client, row)
                 _status_checks[account_id] = time.monotonic()
                 return ("@" + me.username) if me.username else (me.first_name or "Telegram user")
 
@@ -238,6 +225,31 @@ async def refresh_connected_accounts(account_ids: list[str], *, force: bool = Fa
 
     results = await asyncio.gather(*(refresh(account_id) for account_id in account_ids))
     return sorted(set(message for message in results if message))
+
+
+async def confirm_identity(client, row, *, expired: str = SESSION_EXPIRED_MESSAGE,
+                           mismatch: str = "The Telegram session identity changed. Reconnect this account.",
+                           revoke_on_mismatch: bool = True):
+    """Return ``get_me()`` once the session is live and still the stored account.
+
+    A dead session is marked revoked. A different Telegram user than the one
+    stored is never accepted, so a swapped session cannot send or scan.
+    """
+    if not await client.is_user_authorized():
+        _mark_revoked(row["id"])
+        raise TelegramProblem(expired)
+    me = await client.get_me()
+    if me is None:
+        _mark_revoked(row["id"])
+        raise TelegramProblem(expired)
+    actual = ("@" + me.username).lower() if me.username else ""
+    if (row["expected_username"] and row["expected_username"].lower() != actual) or (
+        row["username"] and row["username"].lower() != actual
+    ):
+        if revoke_on_mismatch:
+            _mark_revoked(row["id"])
+        raise TelegramProblem(mismatch)
+    return me
 
 
 def _definitely_not_sent(exc: BaseException) -> bool:
@@ -280,18 +292,9 @@ async def dispatch(campaign_id: str):
             client = new_client(row)
             await client.connect()
             try:
-                if not await client.is_user_authorized():
-                    _mark_revoked(account_id)
-                    raise TelegramProblem("Telegram sender session expired")
-                me = await client.get_me()
-                if me is None:
-                    _mark_revoked(account_id)
-                    raise TelegramProblem("Telegram sender session expired")
-                actual = ("@" + me.username).lower() if me.username else ""
-                if (row["expected_username"] and row["expected_username"].lower() != actual) or (
-                    row["username"] and row["username"].lower() != actual
-                ):
-                    raise TelegramProblem("Telegram sender identity mismatch. Nothing sent.")
+                await confirm_identity(client, row, expired="Telegram sender session expired",
+                                       mismatch="Telegram sender identity mismatch. Nothing sent.",
+                                       revoke_on_mismatch=False)
                 with database() as db:
                     items = db.execute("SELECT * FROM deliveries WHERE campaign_id=? ORDER BY id", (campaign_id,)).fetchall()
                 paused = False

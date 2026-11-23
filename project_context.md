@@ -434,3 +434,13 @@ redirect with the attempts left, and a locked address sees the minutes
 remaining (core.login_status). In production,
 Cloudflare reaches the app via http://172.19.0.1:8789 (the tunnel
 network's gateway) and BROADCASTER_BIND_IP=172.19.0.1.
+
+## Code health (2026-11-23)
+
+core.database() returns a connection whose with-exit commits or rolls back
+and then closes. broadcaster/csv_import.py holds CSV parsing (read_rows)
+and per-row import with savepoints (import_rows -> CsvImportResult); the
+POST /contacts/import route only reads the upload and builds the notice.
+telegram.confirm_identity(client, row, expired=, mismatch=,
+revoke_on_mismatch=) is the single session/identity check. Docker installs
+requirements.lock; tests install requirements-dev.txt.

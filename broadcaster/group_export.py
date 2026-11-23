@@ -110,19 +110,8 @@ def _authorized_account(account_id: str, owner_id: int):
 
 async def _check_identity(client, account) -> None:
     await client.connect()
-    if not await client.is_user_authorized():
-        telegram._mark_revoked(account["id"])
-        raise telegram.TelegramProblem(telegram.SESSION_EXPIRED_MESSAGE)
-    me = await client.get_me()
-    if me is None:
-        telegram._mark_revoked(account["id"])
-        raise telegram.TelegramProblem(telegram.SESSION_EXPIRED_MESSAGE)
-    username = ("@" + me.username).lower() if me.username else ""
-    if (account["expected_username"] and account["expected_username"].lower() != username) or (
-        account["username"] and account["username"].lower() != username
-    ):
-        telegram._mark_revoked(account["id"])
-        raise telegram.TelegramProblem("Telegram identity changed. Reconnect this account.")
+    await telegram.confirm_identity(
+        client, account, mismatch="Telegram identity changed. Reconnect this account.")
 
 
 async def list_groups(account_id: str, owner_id: int) -> list[dict]:

@@ -1,0 +1,28 @@
+# Exact versions the Docker image installs. Generated from requirements.txt;
+# to update: edit the ranges there, then in a clean python:3.12-slim container run
+#   pip install -r requirements.txt && pip freeze > requirements.lock
+# and run the tests before committing.
+annotated-doc==0.0.7
+annotated-types==0.8.0
+anyio==4.16.0
+cffi==2.1.1
+click==8.5.1
+cryptography==47.0.0
+fastapi==0.165.0
+h11==0.16.0
+idna==3.20
+Jinja2==3.1.6
+MarkupSafe==3.0.4
+opentelemetry-api==1.45.2
+pyaes==1.6.1
+pyasn1==0.6.5
+pycparser==3.12
+pydantic==2.14.4
+pydantic_core==2.50.5
+python-multipart==0.0.34
+rsa==4.9.1
+starlette==1.10.0
+Telethon==1.46.0
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+uvicorn==0.54.0

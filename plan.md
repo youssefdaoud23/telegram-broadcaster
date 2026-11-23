@@ -365,3 +365,15 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 - [x] A sender crash while a delivery is marked sending turns it unknown.
 - [x] Campaign page shows an Unknown count and a paused explanation;
       /api/campaigns/{id} reports unknown.
+
+## Code health (2026-11-23)
+
+- [x] database() closes its connection at the end of the with-block.
+- [x] One helper for chunked contact-ID queries (_id_chunks,
+      _missing_contacts) instead of five copies.
+- [x] One Telegram identity check (telegram.confirm_identity) instead of
+      three copies; per-caller messages and revoke behaviour unchanged.
+- [x] CSV import moved from web.py into broadcaster/csv_import.py.
+- [x] requirements.lock (exact versions from the tested image) for Docker;
+      requirements-dev.txt adds the pinned test client for CI/local.
+- [x] Removed unused imports/variables reported by pyflakes.

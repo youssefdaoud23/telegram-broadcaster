@@ -158,3 +158,12 @@ Before making any changes:
     starts is unknown and pauses the broadcast, because the "Failed /
     blocked" reuse preset must never pick someone who may already have
     the message.
+27. Code health (2026-11-23): `with core.database() as db:` now closes the
+    connection on exit (core._ClosingConnection), so never keep a cursor
+    or use db after its with-block. Contact ID chunking lives in
+    core._id_chunks/_missing_contacts; the Telegram identity check is
+    telegram.confirm_identity (used by status check, dispatch and group
+    scans). CSV contact import is broadcaster/csv_import.py. The Docker
+    image installs requirements.lock (exact pins, regenerate from
+    requirements.txt as described in its header); CI and local tests use
+    requirements-dev.txt.
