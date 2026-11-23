@@ -539,7 +539,8 @@ class DirectGroupImportTests(unittest.TestCase):
             ).fetchall()
             self.assertEqual(len(rows),2)
             self.assertEqual((rows[0]["enabled"],rows[0]["consent"]),(0,0))
-            self.assertEqual((rows[1]["enabled"],rows[1]["consent"]),(0,1))
+            # A CSV "Opt In" column never grants messaging permission.
+            self.assertEqual((rows[1]["enabled"],rows[1]["consent"]),(0,0))
             self.assertEqual(core.contact_groups(db,self.owner_id)[0]["total"],2)
             self.assertEqual(db.execute(
                 "SELECT COUNT(*) FROM contact_group_members"
@@ -561,8 +562,10 @@ class DirectGroupImportTests(unittest.TestCase):
                 "SELECT id,enabled,consent FROM contacts WHERE username='@new_inactive_csv'"
             ).fetchone()
             self.assertIsNotNone(contact)
-            self.assertEqual((contact["enabled"],contact["consent"]),(0,1))
+            self.assertEqual((contact["enabled"],contact["consent"]),(0,0))
             contact_id=contact["id"]
+            # Simulate permission recorded later through the verified controls.
+            db.execute("UPDATE contacts SET consent=1 WHERE id=?",(contact_id,))
             db.commit()
         # Deliberately activate through the same action as the page switch.
         toggled=self.http.post(

@@ -13,6 +13,7 @@ The repository includes `.env.example`. Run `python3 scripts/configure.py` on a 
 | `BROADCASTER_PORT` | `8789` | Host port; container always listens on 8080. |
 | `COOKIE_SECURE` | `false` locally | Set `true` when users access the website over HTTPS. |
 | `SESSION_DAYS` | `7` | Website session lifetime, clamped to 1 to 30 days. |
+| `CLIENT_IP_HEADER` | Unset | Optional. Header holding the real visitor IP when the site sits behind a proxy or tunnel, e.g. `CF-Connecting-IP` for Cloudflare. Used only to throttle failed sign-ins per visitor. Honoured only for requests arriving from a private or loopback address; leave unset when the port is reachable directly. |
 | `SEND_ENABLED` | `false` | Keep disabled during setup. Turning on does not authorize unsolicited messaging. |
 | `SEND_MAX_RECIPIENTS` | Unset | Optional positive integer limit. Unset, `0`, `none`, or `unlimited` means no app cap. |
 | `PUBLIC_BASE_URL` | `http://localhost:8789` | Currently informational; does not configure routing, TLS or cookies. |

@@ -10,6 +10,7 @@ This application holds personal contact data, Telegram credentials and session f
 - Set `COOKIE_SECURE=true` when browsers use HTTPS. Do not assume `PUBLIC_BASE_URL` configures a proxy or certificate.
 - Keep `APP_ENCRYPTION_KEY`, `.env`, SQLite database, backups and `telegram_sessions/` private. The Fernet key and Telegram session files are both sensitive.
 - Use a unique strong owner password, provision separate user accounts, and disable accounts that should no longer have access.
+- Failed sign-ins are throttled per username **and** visitor address: 5 failures for one username from one address, or 20 failures from one address across any usernames, block that address for 15 minutes. Guesses from elsewhere do not lock the real user out. Behind a proxy or tunnel, set `CLIENT_IP_HEADER` (see the configuration reference) so visitors are told apart; otherwise every visitor shares the proxy's address.
 - Patch the host, Docker and reverse proxy. Configure firewall and origin rules so the reverse proxy cannot be bypassed.
 - Limit which people have Docker daemon access. Docker control on the host is effectively high privilege.
 - Use a trusted hosting provider and disk protection, and secure off-host backups. Prefer a dedicated host account and restricted project ownership.
@@ -45,7 +46,15 @@ permissions or privacy restrictions. No phone lookup is performed.
 
 `SEND_ENABLED=false` is the safest default. Sending is a separate, user-confirmed action after reviewing recipients. Only eligible opted-in contacts can be selected. Contacts in multiple groups are deduplicated per campaign.
 
-Do not use the system to send unsolicited bulk private messages. When a campaign is interrupted, an unknown delivery state is **not automatically retried**; review history and the Telegram conversation before deliberately reusing a previous broadcast.
+Do not use the system to send unsolicited bulk private messages. If Telegram answers a send with a flood wait or a spam restriction (`PEER_FLOOD`), the broadcast is paused immediately and the remaining recipients stay pending; it never keeps sending to the rest of the list. When a campaign is interrupted, an unknown delivery state is **not automatically retried**; review history and the Telegram conversation before deliberately reusing a previous broadcast.
+
+## Recording permission
+
+Messaging permission can only be granted with the operator's confirmation and
+a written note of how it was obtained, whether for one contact (add or edit
+form) or many (bulk controls). Every grant and withdrawal is written to the
+consent history. CSV imports never grant permission: `Opt In` or `Consent`
+columns are ignored, so an exported and re-imported list must be re-verified.
 
 ## Bulk permission changes
 

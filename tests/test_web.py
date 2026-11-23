@@ -269,7 +269,8 @@ class WebsiteTests(unittest.TestCase):
     def test_add_contact_and_import(self):
         csrf=self.sign_in()
         response=self.testclient.post("/contacts",data={
-            "csrf":csrf,"name":"Alice Tester","username":"@alicetester","consent":"yes","enabled":"yes"
+            "csrf":csrf,"name":"Alice Tester","username":"@alicetester","consent":"yes","enabled":"yes",
+            "consent_evidence":"Signed the paper opt-in form",
         },follow_redirects=False)
         self.assertEqual(response.status_code,303)
         self.assertIn("Alice Tester",self.testclient.get("/contacts").text)

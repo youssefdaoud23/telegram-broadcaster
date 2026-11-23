@@ -69,6 +69,14 @@ CREATE TABLE IF NOT EXISTS login_attempts (
  attempts INTEGER NOT NULL,
  locked_until INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS login_failures (
+ username TEXT NOT NULL,
+ ip TEXT NOT NULL,
+ attempts INTEGER NOT NULL,
+ locked_until INTEGER NOT NULL,
+ PRIMARY KEY(username, ip)
+);
+CREATE INDEX IF NOT EXISTS idx_login_failures_ip ON login_failures(ip, locked_until);
 CREATE TABLE IF NOT EXISTS accounts (
  id TEXT PRIMARY KEY,
  label TEXT NOT NULL,
@@ -310,7 +318,7 @@ def change_password(db: sqlite3.Connection, user_id: int, new_password: str,
         (salt.hex(), password_digest(new_password, salt), user_id),
     )
     db.execute("DELETE FROM sessions WHERE admin_id=?", (user_id,))
-    db.execute("DELETE FROM login_attempts WHERE username=?", (user["username"].lower(),))
+    clear_login_failures(db, user["username"])
 
 
 def set_user_active(db: sqlite3.Connection, user_id: int, active: bool) -> None:
@@ -342,7 +350,7 @@ def reset_admin_password(username: str, password: str) -> None:
             (salt.hex(), digest, row["id"]),
         )
         db.execute("DELETE FROM sessions WHERE admin_id=?", (row["id"],))
-        db.execute("DELETE FROM login_attempts WHERE username=?", (username.lower(),))
+        clear_login_failures(db, username)
         db.commit()
 
 
@@ -355,23 +363,51 @@ def validate_password(row: sqlite3.Row | None, password: str) -> bool:
     return hmac.compare_digest(actual, row["password_digest"])
 
 
-def login_locked(db: sqlite3.Connection, username: str) -> bool:
-    row = db.execute("SELECT attempts,locked_until FROM login_attempts WHERE username=?", (username.lower(),)).fetchone()
-    return bool(row and row["attempts"] >= 5 and row["locked_until"] > now())
+# Failed sign-ins are counted per (username, client IP). A guesser at one
+# address can no longer lock the real user out from everywhere else, and one
+# address trying many usernames is capped separately.
+LOGIN_WINDOW_SECONDS = 900
+LOGIN_MAX_PER_USER_IP = 5
+LOGIN_MAX_PER_IP = 20
 
 
-def failed_login(db: sqlite3.Connection, username: str) -> None:
+def login_locked(db: sqlite3.Connection, username: str, ip: str) -> bool:
+    current = now()
+    row = db.execute(
+        "SELECT attempts FROM login_failures WHERE username=? AND ip=? AND locked_until>?",
+        (username.lower(), ip, current),
+    ).fetchone()
+    if row and row["attempts"] >= LOGIN_MAX_PER_USER_IP:
+        return True
+    total = db.execute(
+        "SELECT COALESCE(SUM(attempts),0) FROM login_failures WHERE ip=? AND locked_until>?",
+        (ip, current),
+    ).fetchone()[0]
+    return total >= LOGIN_MAX_PER_IP
+
+
+def failed_login(db: sqlite3.Connection, username: str, ip: str) -> None:
     username = username.lower()
-    old = db.execute("SELECT attempts,locked_until FROM login_attempts WHERE username=?", (username,)).fetchone()
-    if old and old["locked_until"] > now():
-        count = old["attempts"] + 1
-    else:
-        count = 1
+    current = now()
+    db.execute("DELETE FROM login_failures WHERE locked_until<=?", (current,))
+    old = db.execute(
+        "SELECT attempts FROM login_failures WHERE username=? AND ip=?", (username, ip),
+    ).fetchone()
+    count = old["attempts"] + 1 if old else 1
     db.execute(
-        "INSERT INTO login_attempts(username,attempts,locked_until) VALUES (?,?,?) "
-        "ON CONFLICT(username) DO UPDATE SET attempts=excluded.attempts,locked_until=excluded.locked_until",
-        (username, count, now() + 900),
+        "INSERT INTO login_failures(username,ip,attempts,locked_until) VALUES (?,?,?,?) "
+        "ON CONFLICT(username,ip) DO UPDATE SET attempts=excluded.attempts,"
+        "locked_until=excluded.locked_until",
+        (username, ip, count, current + LOGIN_WINDOW_SECONDS),
     )
+
+
+def clear_login_failures(db: sqlite3.Connection, username: str, ip: str | None = None) -> None:
+    """Clear one address after a successful sign-in, or all after a password reset."""
+    if ip is None:
+        db.execute("DELETE FROM login_failures WHERE username=?", (username.lower(),))
+    else:
+        db.execute("DELETE FROM login_failures WHERE username=? AND ip=?", (username.lower(), ip))
 
 
 def new_session(db: sqlite3.Connection, admin_id: int) -> tuple[str,str]:
@@ -683,6 +719,46 @@ def bulk_archive_contacts(db: sqlite3.Connection, owner_id: int,
     return archived
 
 
+_INSUFFICIENT_CONSENT_PROOF = {
+    "group membership", "telegram group membership", "telegram group",
+    "imported from group", "imported from telegram", "group import",
+    "member of group", "public telegram group", "scraped from group",
+}
+
+
+def consent_evidence(evidence: str, *, grant: bool, verified: bool,
+                     withdrawal_default: str) -> str:
+    """Validate and normalize the reason recorded with any consent change.
+
+    Granting always needs the operator's explicit confirmation and a real
+    description of how permission was obtained. Withdrawal needs neither.
+    """
+    evidence = " ".join(str(evidence).strip().split())
+    if len(evidence) > 500:
+        raise ValueError("Consent reason or evidence must be under 500 characters")
+    if grant and (not verified or len(evidence) < 10
+                  or evidence.casefold() in _INSUFFICIENT_CONSENT_PROOF):
+        raise ValueError(
+            "Confirm each person's direct permission and record how it was obtained "
+            "(group membership or import is not evidence of opt-in)"
+        )
+    if not grant and not evidence:
+        evidence = withdrawal_default
+    return evidence
+
+
+def record_consent_event(db: sqlite3.Connection, contact_id: int, owner_id: int,
+                         actor_id: int, previous: int, new: int,
+                         evidence: str, source: str, timestamp: int | None = None) -> None:
+    db.execute("""
+        INSERT INTO contact_consent_events
+        (contact_id,owner_id,actor_id,previous_consent,new_consent,
+         evidence,source,created_at)
+        VALUES (?,?,?,?,?,?,?,?)
+    """, (contact_id, owner_id, actor_id, int(previous), int(new), evidence, source,
+          now() if timestamp is None else timestamp))
+
+
 def bulk_update_contact_consent(
     db: sqlite3.Connection, owner_id: int, actor_id: int,
     *, grant: bool, evidence: str, verified: bool = False,
@@ -698,22 +774,10 @@ def bulk_update_contact_consent(
     if actor_id != owner_id:
         # Every website user has their own isolated contact workspace.
         raise ValueError("Consent changes must be made by the workspace user")
-    evidence = " ".join(evidence.strip().split())
-    if len(evidence) > 500:
-        raise ValueError("Consent reason or evidence must be under 500 characters")
-    insufficient_proof = {
-        "group membership", "telegram group membership", "telegram group",
-        "imported from group", "imported from telegram", "group import",
-        "member of group", "public telegram group", "scraped from group",
-    }
-    if grant and (not verified or len(evidence) < 10
-                  or evidence.casefold() in insufficient_proof):
-        raise ValueError(
-            "Confirm each person's direct permission and record how it was obtained "
-            "(group membership or import is not evidence of opt-in)"
-        )
-    if not grant and not evidence:
-        evidence = "Consent withdrawn in contact management"
+    evidence = consent_evidence(
+        evidence, grant=grant, verified=verified,
+        withdrawal_default="Consent withdrawn in contact management",
+    )
     if (group_id is None) == (contact_ids is None):
         raise ValueError("Choose selected contacts or one whole group")
     db.execute("BEGIN IMMEDIATE")
@@ -757,12 +821,8 @@ def bulk_update_contact_consent(
         )
         if updated.rowcount!=1:
             raise ValueError("Contact status changed during consent update; retry")
-        db.execute("""
-            INSERT INTO contact_consent_events
-            (contact_id,owner_id,actor_id,previous_consent,new_consent,
-             evidence,source,created_at)
-            VALUES (?,?,?,?,?,?,?,?)
-        """,(row["id"],owner_id,actor_id,row["consent"],intended,evidence,source,timestamp))
+        record_consent_event(db,row["id"],owner_id,actor_id,row["consent"],intended,
+                             evidence,source,timestamp)
     return len(changes),len(rows)
 
 

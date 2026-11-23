@@ -64,7 +64,7 @@ class PersistenceTests(unittest.TestCase):
         with core.database() as db:
             admin = db.execute("SELECT * FROM admins WHERE username='admin'").fetchone()
             token, _ = core.new_session(db, admin["id"])
-            core.failed_login(db, "admin")
+            core.failed_login(db, "admin", "203.0.113.5")
             db.commit()
         core.reset_admin_password("ADMIN", "x")
         with core.database() as db:
@@ -74,7 +74,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertFalse(core.validate_password(changed, "old-password"))
             self.assertTrue(core.validate_password(untouched, "another-password"))
             self.assertIsNone(core.session(db, token))
-            self.assertIsNone(db.execute("SELECT username FROM login_attempts WHERE username='admin'").fetchone())
+            self.assertIsNone(db.execute("SELECT username FROM login_failures WHERE username='admin'").fetchone())
         with self.assertRaisesRegex(ValueError, "not found"):
             core.reset_admin_password("missing", "test")
         with self.assertRaisesRegex(ValueError, "cannot be empty"):

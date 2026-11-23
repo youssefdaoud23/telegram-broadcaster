@@ -340,3 +340,17 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
       safety, history preservation and draft eligibility without Telegram.
 - [ ] Verify full CI and fresh Docker smoke after GitHub publish.
 - [ ] Deploy to production only after verified backup and no sends active.
+
+## Hardening: consent side doors, spam stop, login throttling (2026-11-23)
+
+- [x] Production: publish port 8789 only on the private tunnel gateway
+      172.19.0.1 so the Cloudflare route cannot be bypassed.
+- [x] Require evidence + confirmation and record history for consent
+      granted or withdrawn through the add/edit contact forms.
+- [x] Stop importing CSV Opt In/Consent values.
+- [x] Pause broadcasts on PeerFloodError/FloodError; no further sends.
+- [x] Throttle failed sign-ins per (username, IP) and per IP, with an
+      opt-in trusted client-IP header for proxies/tunnels.
+- [x] Offline tests for all of the above (tests/test_hardening.py).
+- [ ] Set CLIENT_IP_HEADER=CF-Connecting-IP in production .env on deploy.
+- [ ] CI green, merge to main, deploy after backup with no active sends.

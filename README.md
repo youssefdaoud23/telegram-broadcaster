@@ -78,8 +78,9 @@ an Enabled column in the incoming CSV. You can activate them individually or
 in bulk afterward. Re-importing an existing contact does not override a
 previously chosen Active/Inactive status. Messaging permission remains a
 separate requirement: direct Telegram scans never grant consent, and a Telegram
-membership alone does not establish opt-in. CSV opt-in values are retained
-separately from Active status. Existing contacts keep their
+membership alone does not establish opt-in. CSV `Opt In`/`Consent` columns
+are not imported; record permission afterwards with the verified consent
+controls, which require a note on how it was obtained. Existing contacts keep their
 recorded consent and enabled status. A shared Telegram group is not consent to receive
 private promotional messages. The app never sends or drafts messages as
 part of importing.

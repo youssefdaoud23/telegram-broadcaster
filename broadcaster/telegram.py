@@ -311,9 +311,15 @@ async def dispatch(campaign_id: str):
                         with database() as db:
                             db.execute("UPDATE deliveries SET state='sent',message_id=?,error='',updated_at=? WHERE id=?", (msg.id,now(),delivery["id"]))
                             db.commit()
-                    except errors.FloodWaitError:
+                    except (errors.FloodError, errors.PeerFloodError) as exc:
+                        # FloodWait: a cooldown. PeerFlood: Telegram has flagged
+                        # this account for spam. Either way, sending more makes it
+                        # worse (and risks a ban), so stop the whole broadcast.
+                        reason = ("Telegram spam restriction (PEER_FLOOD); broadcast paused"
+                                  if isinstance(exc, errors.PeerFloodError)
+                                  else "Telegram flood wait; no automatic retry")
                         with database() as db:
-                            db.execute("UPDATE deliveries SET state='blocked',error='Telegram flood wait; no automatic retry',updated_at=? WHERE id=?", (now(),delivery["id"]))
+                            db.execute("UPDATE deliveries SET state='blocked',error=?,updated_at=? WHERE id=?", (reason,now(),delivery["id"]))
                             db.commit()
                         paused = True
                         break

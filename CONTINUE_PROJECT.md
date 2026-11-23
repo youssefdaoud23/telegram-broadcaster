@@ -136,3 +136,16 @@ Before making any changes:
     never physical deletion of campaign or delivery history. The
     Telegram worker rechecks consent before each send, but cannot
     retract already sent or in-flight messages.
+
+25. Hardening (2026-11-23): every consent grant, including the single
+    add/edit contact forms, requires the confirmation checkbox plus an
+    evidence note (core.consent_evidence) and is written to
+    contact_consent_events (core.record_consent_event). Edit-form
+    withdrawals are recorded too. CSV Opt In/Consent columns are never
+    imported. PeerFloodError and any FloodError pause the broadcast and
+    leave remaining recipients pending. Failed sign-ins are throttled per
+    (username, client IP) in login_failures (5 per pair, 20 per IP, 15 min);
+    the legacy login_attempts table is unused. CLIENT_IP_HEADER (Cloudflare:
+    CF-Connecting-IP) is honoured only from RFC1918/ULA/loopback peers.
+    Production publishes port 8789 only on 172.19.0.1 (BROADCASTER_BIND_IP),
+    the Cloudflare tunnel network's gateway, which the tunnel route uses.
