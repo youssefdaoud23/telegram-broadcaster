@@ -118,8 +118,7 @@ class ContactGroupsTests(unittest.TestCase):
         b=self.add_group("Group of seven")
         create=self.post("/contacts",{
             "name":"Alice","username":"@alice_group_123","enabled":"yes",
-            "consent":"yes","consent_evidence":"Opted in by email on 3 Nov",
-            "group_ids":[str(a),str(b)],
+            "consent":"yes","group_ids":[str(a),str(b)],
         })
         self.assertEqual(create.status_code,303)
         with core.database() as db:

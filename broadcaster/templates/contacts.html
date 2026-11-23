@@ -137,9 +137,7 @@
           {% else %}<p class="subtle">No groups yet. <a href="/contacts/groups">Create a group</a> first.</p>{% endfor %}
         </fieldset>
         <label class="checkline"><input type="checkbox" name="enabled" value="yes" checked> Contact is active</label>
-        <label class="checkline"><input type="checkbox" name="consent" value="yes"> I have verified this person agreed to private messages</label>
-        <label for="add-consent-evidence">How was permission given? (required when checked)</label>
-        <input id="add-consent-evidence" name="consent_evidence" maxlength="500" placeholder="e.g. Signed up via website form on 3 Nov">
+        <label class="checkline"><input type="checkbox" name="consent" value="yes"> Contact agreed to private messages</label>
         <button class="btn btn-primary btn-block">＋ Add contact</button>
       </form>
     </section>
@@ -148,7 +146,7 @@
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="file" name="file" accept=".csv,text/csv" required>
         <label for="csv-import-group">Import into contact group (optional)</label>
         <input id="csv-import-group" name="group_name" maxlength="64" placeholder="Reuse or create a group">
-        <small>Up to 5,000 CSV rows and 1 MB. Existing contacts are reused, not duplicated. The optional group is created if missing; group-export CSVs also carry their Telegram group name. The Groups column uses existing groups. New and restored contacts are Inactive by default, regardless of any Enabled column in the CSV. Existing contacts keep their current Active setting. Messaging permission remains separate: Opt In or Consent columns are not imported, so record permission with the verified consent controls.</small>
+        <small>Up to 5,000 CSV rows and 1 MB. Existing contacts are reused, not duplicated. The optional group is created if missing; group-export CSVs also carry their Telegram group name. The Groups column uses existing groups. New and restored contacts are Inactive by default, regardless of any Enabled column in the CSV. Existing contacts keep their current Active setting. Messaging permission remains separate.</small>
         <button class="btn btn-secondary btn-block" type="submit">Import contacts</button>
       </form>
     </section>

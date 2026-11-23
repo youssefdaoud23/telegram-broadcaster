@@ -83,80 +83,41 @@ class HardeningTests(unittest.TestCase):
                 "FROM contact_consent_events ORDER BY id"
             ).fetchall()
 
-    # --- #2: consent can only be granted with a recorded reason ---------------
+    # --- consent ticked on one contact: no reason needed, change still logged --
 
-    def test_add_form_requires_reason_to_grant_and_records_history(self):
-        rejected = self.http.post("/contacts", data={
-            "csrf": self.csrf, "name": "No Reason", "username": "@no_reason_1",
+    def test_add_form_consent_needs_no_reason_and_is_logged(self):
+        self.http.post("/contacts", data={
+            "csrf": self.csrf, "name": "Agreed", "username": "@agreed_contact1",
             "consent": "yes",
         }, follow_redirects=False)
-        self.assertIn("record%20how%20it%20was%20obtained", rejected.headers["location"])
-        self.assertIsNone(self.contact("@no_reason_1"))
-
-        for weak in ("", "short", "Telegram group membership"):
-            self.http.post("/contacts", data={
-                "csrf": self.csrf, "name": "Weak", "username": "@weak_reason_1",
-                "consent": "yes", "consent_evidence": weak,
-            }, follow_redirects=False)
-            self.assertIsNone(self.contact("@weak_reason_1"))
-
-        self.http.post("/contacts", data={
-            "csrf": self.csrf, "name": "With Reason", "username": "@with_reason_1",
-            "consent": "yes", "consent_evidence": "Signed paper opt-in form 3 Nov",
-        }, follow_redirects=False)
-        self.assertEqual(self.contact("@with_reason_1")["consent"], 1)
+        self.assertEqual(self.contact("@agreed_contact1")["consent"], 1)
         events = self.consent_events()
-        self.assertEqual(len(events), 1)
-        self.assertEqual((events[0]["previous_consent"], events[0]["new_consent"],
-                          events[0]["source"]), (0, 1, "contact_form"))
-        self.assertEqual(events[0]["evidence"], "Signed paper opt-in form 3 Nov")
+        self.assertEqual([(e["previous_consent"], e["new_consent"], e["source"])
+                          for e in events], [(0, 1, "contact_form")])
 
-    def test_add_form_without_consent_needs_no_reason_and_writes_no_history(self):
         self.http.post("/contacts", data={
             "csrf": self.csrf, "name": "Plain", "username": "@plain_contact1",
         }, follow_redirects=False)
         self.assertEqual(self.contact("@plain_contact1")["consent"], 0)
-        self.assertEqual(self.consent_events(), [])
+        self.assertEqual(len(self.consent_events()), 1)
 
-    def test_edit_form_grant_needs_reason_and_both_directions_are_recorded(self):
+    def test_edit_form_consent_changes_need_no_reason_and_are_logged(self):
         self.http.post("/contacts", data={
             "csrf": self.csrf, "name": "Edit Me", "username": "@edit_consent1",
         }, follow_redirects=False)
         cid = self.contact("@edit_consent1")["id"]
         base = {"csrf": self.csrf, "name": "Edit Me", "username": "@edit_consent1",
                 "enabled": "yes"}
-
         self.http.post(f"/contacts/{cid}/edit", data={**base, "consent": "yes"},
                        follow_redirects=False)
-        self.assertEqual(self.contact("@edit_consent1")["consent"], 0)
-        self.assertEqual(self.consent_events(), [])
-
-        self.http.post(f"/contacts/{cid}/edit", data={
-            **base, "consent": "yes", "consent_evidence": "Replied YES to opt-in on 4 Nov",
-        }, follow_redirects=False)
         self.assertEqual(self.contact("@edit_consent1")["consent"], 1)
-
-        # Saving again with consent unchanged needs no reason and adds no event.
+        # Saving again without changing consent adds nothing to the history.
         self.http.post(f"/contacts/{cid}/edit", data={**base, "consent": "yes"},
                        follow_redirects=False)
-        self.assertEqual(len(self.consent_events()), 1)
-
         self.http.post(f"/contacts/{cid}/edit", data=base, follow_redirects=False)
         self.assertEqual(self.contact("@edit_consent1")["consent"], 0)
-        events = self.consent_events()
-        self.assertEqual([(e["previous_consent"], e["new_consent"]) for e in events],
-                         [(0, 1), (1, 0)])
-        self.assertEqual(events[1]["evidence"], "Consent withdrawn in contact edit form")
-
-    def test_csv_opt_in_column_never_grants_consent(self):
-        raw = ("Name,Username,Opt In,Consent\n"
-               "Csv Person,@csv_optin_one,yes,yes\n").encode()
-        result = self.http.post("/contacts/import", data={"csrf": self.csrf},
-                                files={"file": ("c.csv", raw, "text/csv")},
-                                follow_redirects=False)
-        self.assertIn("CSV%20Opt%20In%20is%20not%20imported", result.headers["location"])
-        self.assertEqual(self.contact("@csv_optin_one")["consent"], 0)
-        self.assertEqual(self.consent_events(), [])
+        self.assertEqual([(e["previous_consent"], e["new_consent"])
+                          for e in self.consent_events()], [(0, 1), (1, 0)])
 
     # --- #3: a spam restriction stops the whole broadcast -----------------------
 
@@ -231,6 +192,31 @@ class HardeningTests(unittest.TestCase):
         self.assertIn("Too%20many", self.login_location(attacker, "testpassword"))
         owner = self.client("203.0.113.10")
         self.assertEqual(self.login_location(owner, "testpassword"), "/")
+
+    def test_login_page_counts_down_attempts_then_shows_lock_time(self):
+        device = self.client("198.51.100.90")
+        notices = [self.login_location(device, "wrong-password")
+                   for _ in range(core.LOGIN_MAX_PER_USER_IP)]
+        self.assertIn("4%20attempts%20left", notices[0])
+        self.assertIn("2%20attempts%20left", notices[2])
+        self.assertIn("1%20attempt%20left", notices[3])
+        self.assertIn("locked%20for%2015%20minutes", notices[0])
+        self.assertIn("try%20again%20in%2015%20minutes", notices[4])
+        self.assertIn("try%20again%20in%2015%20minutes",
+                      self.login_location(device, "testpassword"))
+        page = device.get(notices[0])
+        self.assertIn("4 attempts left before sign-in from this device is locked", page.text)
+
+    def test_lock_time_shrinks_as_the_window_passes(self):
+        with core.database() as db:
+            for _ in range(core.LOGIN_MAX_PER_USER_IP):
+                core.failed_login(db, "owner", "198.51.100.91")
+            db.execute("UPDATE login_failures SET locked_until=? WHERE ip=?",
+                       (core.now() + 61, "198.51.100.91"))
+            self.assertEqual(core.login_status(db, "owner", "198.51.100.91")[0], 0)
+            db.commit()
+        notice = self.login_location(self.client("198.51.100.91"), "testpassword")
+        self.assertIn("try%20again%20in%202%20minutes", notice)
 
     def test_one_address_trying_many_usernames_is_capped(self):
         sprayer = self.client("198.51.100.77")

@@ -371,19 +371,35 @@ LOGIN_MAX_PER_USER_IP = 5
 LOGIN_MAX_PER_IP = 20
 
 
-def login_locked(db: sqlite3.Connection, username: str, ip: str) -> bool:
+def login_status(db: sqlite3.Connection, username: str, ip: str) -> tuple[int, int]:
+    """Return (attempts_left, seconds_until_unlocked) for this username and address.
+
+    attempts_left is the smaller of the per-username and per-address budgets.
+    seconds_until_unlocked is 0 unless the address is currently locked.
+    """
     current = now()
-    row = db.execute(
-        "SELECT attempts FROM login_failures WHERE username=? AND ip=? AND locked_until>?",
+    pair = db.execute(
+        "SELECT attempts,locked_until FROM login_failures "
+        "WHERE username=? AND ip=? AND locked_until>?",
         (username.lower(), ip, current),
     ).fetchone()
-    if row and row["attempts"] >= LOGIN_MAX_PER_USER_IP:
-        return True
-    total = db.execute(
-        "SELECT COALESCE(SUM(attempts),0) FROM login_failures WHERE ip=? AND locked_until>?",
+    ip_rows = db.execute(
+        "SELECT COALESCE(SUM(attempts),0),COALESCE(MAX(locked_until),0) "
+        "FROM login_failures WHERE ip=? AND locked_until>?",
         (ip, current),
-    ).fetchone()[0]
-    return total >= LOGIN_MAX_PER_IP
+    ).fetchone()
+    pair_left = LOGIN_MAX_PER_USER_IP - (pair["attempts"] if pair else 0)
+    ip_left = LOGIN_MAX_PER_IP - ip_rows[0]
+    wait = 0
+    if pair_left <= 0:
+        wait = max(wait, pair["locked_until"] - current)
+    if ip_left <= 0:
+        wait = max(wait, ip_rows[1] - current)
+    return max(0, min(pair_left, ip_left)), wait
+
+
+def login_locked(db: sqlite3.Connection, username: str, ip: str) -> bool:
+    return login_status(db, username, ip)[1] > 0
 
 
 def failed_login(db: sqlite3.Connection, username: str, ip: str) -> None:

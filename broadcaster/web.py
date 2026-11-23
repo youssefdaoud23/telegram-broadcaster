@@ -274,6 +274,12 @@ def client_ip(request: Request) -> str:
     return peer or "unknown"
 
 
+def _locked_notice(seconds: int) -> str:
+    minutes = max(1, -(-seconds // 60))
+    return (f"Too many attempts. Sign-in from this device is locked; try again in "
+            f"{minutes} {'minute' if minutes == 1 else 'minutes'}.")
+
+
 @app.post("/login")
 def login_action(request: Request, username: str = Form(""), password: str = Form("")):
     name = username.strip().lower()[:80]
@@ -281,13 +287,22 @@ def login_action(request: Request, username: str = Form(""), password: str = For
         return redirect("/login", "Check your username and password.")
     ip = client_ip(request)
     with core.database() as db:
-        if core.login_locked(db, name, ip):
-            return redirect("/login", "Too many attempts. Try again in 15 minutes.")
+        _, wait = core.login_status(db, name, ip)
+        if wait:
+            return redirect("/login", _locked_notice(wait))
         row = db.execute("SELECT * FROM admins WHERE username=? AND active=1", (name,)).fetchone()
         if not core.validate_password(row, password):
             core.failed_login(db, name, ip)
             db.commit()
-            return redirect("/login", "Incorrect username or password.")
+            left, wait = core.login_status(db, name, ip)
+            if wait:
+                return redirect("/login", "Incorrect username or password. " + _locked_notice(wait))
+            return redirect(
+                "/login",
+                f"Incorrect username or password. {left} "
+                f"{'attempt' if left == 1 else 'attempts'} left before sign-in from this "
+                f"device is locked for {core.LOGIN_WINDOW_SECONDS // 60} minutes.",
+            )
         core.clear_login_failures(db, name, ip)
         raw, _ = core.new_session(db, row["id"])
         db.commit()
@@ -354,21 +369,20 @@ def add_contact(
     request: Request, csrf: str = Form(""), name: str = Form(""),
     username: str = Form(""), phone: str = Form(""), user_id: str = Form(""),
     notes: str = Form(""), consent: str = Form(""), enabled: str = Form(""),
-    consent_evidence: str = Form(""), group_ids: list[int] = Form([]),
+    group_ids: list[int] = Form([]),
 ):
     user=authorize(request, csrf)
     try:
         item = core.normalize_contact(name, username, phone, user_id, notes)
         grant = consent == "yes"
-        evidence = (core.consent_evidence(consent_evidence, grant=True, verified=True,
-                                          withdrawal_default="")
-                    if grant else "")
         with core.database() as db:
             contact_id=core.insert_contact(db, item, user["admin_id"],
                                            consent=grant, enabled=enabled=="yes")
             if grant:
+                # No reason is asked for; the history just notes when and where.
                 core.record_consent_event(db, contact_id, user["admin_id"], user["admin_id"],
-                                          0, 1, evidence, "contact_form")
+                                          0, 1, "Marked as agreed when contact was added",
+                                          "contact_form")
             core.set_contact_groups(db,user["admin_id"],contact_id,group_ids)
             db.commit()
     except ValueError as exc:
@@ -690,7 +704,7 @@ def edit_contact_action(
     request: Request, contact_id: int, csrf: str = Form(""), name: str = Form(""),
     username: str = Form(""), phone: str = Form(""), user_id: str = Form(""),
     notes: str = Form(""), consent: str = Form(""), enabled: str = Form(""),
-    consent_evidence: str = Form(""), group_ids: list[int] = Form([]),
+    group_ids: list[int] = Form([]),
 ):
     user=authorize(request, csrf)
     try:
@@ -701,16 +715,14 @@ def edit_contact_action(
                 raise HTTPException(404, "Contact not found")
             new_consent = int(consent == "yes")
             if new_consent != existing["consent"]:
-                # Changing permission from the edit form follows the same rules
-                # as bulk consent: a grant needs evidence, and both directions
-                # are written to the consent history.
-                evidence = core.consent_evidence(
-                    consent_evidence, grant=bool(new_consent), verified=True,
-                    withdrawal_default="Consent withdrawn in contact edit form",
+                # No reason is asked for; the history just notes the change.
+                core.record_consent_event(
+                    db, contact_id, user["admin_id"], user["admin_id"],
+                    existing["consent"], new_consent,
+                    "Marked as agreed in contact edit form" if new_consent
+                    else "Consent removed in contact edit form",
+                    "contact_form",
                 )
-                core.record_consent_event(db, contact_id, user["admin_id"], user["admin_id"],
-                                          existing["consent"], new_consent, evidence,
-                                          "contact_form")
             target = item["username"] or item["phone"] or item["user_id"]
             duplicate = db.execute("""
                 SELECT id FROM contacts WHERE owner_id=? AND archived=0 AND id<>? AND
@@ -759,6 +771,7 @@ async def import_contacts(request: Request, csrf: str = Form(""),
         if not records:
             raise ValueError("CSV has no contact rows")
         requested_group = core.validate_group_name(group_name) if group_name.strip() else ""
+        yes = lambda value: str(value or "").strip().casefold() in {"yes", "true", "1", "y"}
         created = linked = unchanged = skipped = new_groups = restored = 0
         skipped_reasons: dict[str, int] = {}
         imported_group_ids: set[int] = set()
@@ -822,12 +835,10 @@ async def import_contacts(request: Request, csrf: str = Form(""),
                             pending_groups[key] = group_id
                         selected_groups.append(group_id)
                     selected_groups = sorted(set(selected_groups))
-                    # A CSV "Opt In"/"Consent" column is never trusted: a
-                    # spreadsheet cell is not evidence of permission. Grant
-                    # it afterwards through the verified consent controls.
                     is_new, added_links, was_restored = group_import.import_contact_record(
                         db, data, user["admin_id"], selected_groups,
-                        consent=False, restore_archived=True,
+                        consent=yes(row.get("Opt In") or row.get("Consent")),
+                        restore_archived=True,
                     )
                     db.execute("RELEASE SAVEPOINT import_contact")
                     known_groups.update(pending_groups)
@@ -854,12 +865,11 @@ async def import_contacts(request: Request, csrf: str = Form(""),
             f"{unchanged} already present; {skipped} skipped; "
             f"{new_groups} groups created."
         )
-        # Notices are capped at 230 characters, so the consent note goes
-        # before the (optional, longer) skip reason.
-        message += " New/restored contacts start Inactive; CSV Opt In is not imported."
         if skipped:
             reason = max(skipped_reasons, key=skipped_reasons.get)
             message += f" Main skip reason: {reason[:85]}."
+        message += (" New and restored contacts are Inactive by default. "
+                    "Existing contacts keep their prior Active status and messaging permission.")
         target = "/contacts"
         if requested_group:
             group_id = known_groups.get(requested_group.casefold())

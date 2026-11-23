@@ -48,13 +48,8 @@ permissions or privacy restrictions. No phone lookup is performed.
 
 Do not use the system to send unsolicited bulk private messages. If Telegram answers a send with a flood wait or a spam restriction (`PEER_FLOOD`), the broadcast is paused immediately and the remaining recipients stay pending; it never keeps sending to the rest of the list. When a campaign is interrupted, an unknown delivery state is **not automatically retried**; review history and the Telegram conversation before deliberately reusing a previous broadcast.
 
-## Recording permission
-
-Messaging permission can only be granted with the operator's confirmation and
-a written note of how it was obtained, whether for one contact (add or edit
-form) or many (bulk controls). Every grant and withdrawal is written to the
-consent history. CSV imports never grant permission: `Opt In` or `Consent`
-columns are ignored, so an exported and re-imported list must be re-verified.
+Ticking or unticking consent on a single contact's add or edit form is also
+written to the consent history (no reason is required there).
 
 ## Bulk permission changes
 

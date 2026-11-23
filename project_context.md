@@ -417,14 +417,16 @@ data or restart production without separate verified backup.
 
 ## Hardening (2026-11-23)
 
-Consent can no longer be set without evidence: POST /contacts and
-POST /contacts/{id}/edit accept consent_evidence, validate it with
-core.consent_evidence (same rules as bulk grants) and write a
-contact_form row to contact_consent_events for any grant or withdrawal.
-CSV import always creates contacts with consent=0. telegram.dispatch
+POST /contacts and POST /contacts/{id}/edit set consent from the
+checkbox with no reason required (maintainer decision: consent is given
+with the number) and write a contact_form row to contact_consent_events
+for any grant or withdrawal. CSV Opt In/Consent still imports as before.
+telegram.dispatch
 treats errors.FloodError and errors.PeerFloodError alike: mark the
 delivery blocked, pause the campaign, leave the rest pending.
 Sign-in throttling lives in login_failures(username, ip); web.client_ip
-reads CLIENT_IP_HEADER only from private/loopback peers. In production,
+reads CLIENT_IP_HEADER only from private/loopback peers. Failed sign-ins
+redirect with the attempts left, and a locked address sees the minutes
+remaining (core.login_status). In production,
 Cloudflare reaches the app via http://172.19.0.1:8789 (the tunnel
 network's gateway) and BROADCASTER_BIND_IP=172.19.0.1.

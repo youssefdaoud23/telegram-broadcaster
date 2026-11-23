@@ -345,12 +345,13 @@ The new server directory is /root/n8n/telegram-broadcaster and has the verified 
 
 - [x] Production: publish port 8789 only on the private tunnel gateway
       172.19.0.1 so the Cloudflare route cannot be bypassed.
-- [x] Require evidence + confirmation and record history for consent
-      granted or withdrawn through the add/edit contact forms.
-- [x] Stop importing CSV Opt In/Consent values.
+- [x] Log consent ticked/unticked on the add/edit contact forms to the
+      consent history (no reason required, by maintainer decision; CSV
+      Opt In values still import).
 - [x] Pause broadcasts on PeerFloodError/FloodError; no further sends.
 - [x] Throttle failed sign-ins per (username, IP) and per IP, with an
       opt-in trusted client-IP header for proxies/tunnels.
+- [x] Login page shows attempts left and minutes until unlock.
 - [x] Offline tests for all of the above (tests/test_hardening.py).
 - [ ] Set CLIENT_IP_HEADER=CF-Connecting-IP in production .env on deploy.
 - [ ] CI green, merge to main, deploy after backup with no active sends.

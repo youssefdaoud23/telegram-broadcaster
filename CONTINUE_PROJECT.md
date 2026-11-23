@@ -137,15 +137,17 @@ Before making any changes:
     Telegram worker rechecks consent before each send, but cannot
     retract already sent or in-flight messages.
 
-25. Hardening (2026-11-23): every consent grant, including the single
-    add/edit contact forms, requires the confirmation checkbox plus an
-    evidence note (core.consent_evidence) and is written to
-    contact_consent_events (core.record_consent_event). Edit-form
-    withdrawals are recorded too. CSV Opt In/Consent columns are never
-    imported. PeerFloodError and any FloodError pause the broadcast and
+25. Hardening (2026-11-23): the maintainer decided consent is given when
+    a person hands over their number, so the single add/edit contact
+    forms and CSV Opt In/Consent columns set consent WITHOUT a reason.
+    Do not add evidence requirements there. Form changes are still logged
+    silently to contact_consent_events (source contact_form). Bulk consent
+    keeps its existing attestation. PeerFloodError and any FloodError pause the broadcast and
     leave remaining recipients pending. Failed sign-ins are throttled per
     (username, client IP) in login_failures (5 per pair, 20 per IP, 15 min);
-    the legacy login_attempts table is unused. CLIENT_IP_HEADER (Cloudflare:
+    the legacy login_attempts table is unused. The login page tells the
+    user how many attempts remain and, when locked, how many minutes
+    remain (core.login_status). CLIENT_IP_HEADER (Cloudflare:
     CF-Connecting-IP) is honoured only from RFC1918/ULA/loopback peers.
     Production publishes port 8789 only on 172.19.0.1 (BROADCASTER_BIND_IP),
     the Cloudflare tunnel network's gateway, which the tunnel route uses.
