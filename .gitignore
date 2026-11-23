@@ -18,3 +18,8 @@ coverage/
 
 # Local code-graph analysis output (graphify)
 graphify-out/
+
+# Private maintainer notes: kept in the server checkout only, never published
+plan.md
+project_context.md
+CONTINUE_PROJECT.md
