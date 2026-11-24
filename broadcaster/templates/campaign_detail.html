@@ -19,6 +19,8 @@
 {% elif campaign['state'] in ['queued','sending'] %}<div class="alert alert-neutral">Delivery is in progress. This page refreshes automatically.</div><span id="campaign-refresh" data-active="true"></span>
 {% elif campaign['state']=='paused' %}
 <div class="alert alert-warning">Sending was paused to protect the sender account. Recipients still marked pending were not messaged; use "Reuse and edit as a new broadcast" and choose "Not yet attempted" to continue later.{% if counts.get('unknown',0) %} Anyone marked unknown may already have the message: check their chat before sending to them again.{% endif %}</div>
+{% elif campaign['state']=='failed' %}
+<div class="alert alert-warning">Sending stopped because the sender account had a problem (for example, its Telegram session expired). Recipients still marked pending were not messaged: check the account on the Accounts page, then use "Reuse and edit as a new broadcast" and choose "Not yet attempted".{% if counts.get('unknown',0) %} Anyone marked unknown may already have the message: check their chat before sending to them again.{% endif %}</div>
 {% elif campaign['state']=='interrupted' %}
 <div class="alert alert-warning">Delivery was interrupted. Messages with unknown, sent, failed or blocked status are never automatically retried.</div>
 {% if retry_id %}

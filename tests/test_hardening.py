@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 from telethon import errors, types
 
-from broadcaster import core, telegram
+from broadcaster import core, group_export, telegram
 from broadcaster.web import app, client_ip
 
 
@@ -216,6 +216,29 @@ class HardeningTests(unittest.TestCase):
         self.assertEqual(len(waits), 3)  # between messages only, not after the last
         self.assertTrue(all(3 <= w <= 6 for w in waits), waits)
 
+    def test_pages_do_not_wait_for_a_running_broadcast(self):
+        campaign = self._queued_campaign(1)
+        with core.database() as db:
+            account_id = db.execute("SELECT account_id FROM campaigns WHERE id=?",
+                                    (campaign,)).fetchone()[0]
+
+        async def check_while_sending():
+            lock = telegram.account_lock(account_id)
+            await lock.acquire()  # held by the broadcast until it ends
+            try:
+                with patch("broadcaster.telegram.new_client",
+                           side_effect=AssertionError("must not connect")):
+                    warnings = await asyncio.wait_for(
+                        telegram.refresh_connected_accounts([account_id], force=True), timeout=2)
+                    with self.assertRaisesRegex(telegram.TelegramProblem, "sending a broadcast"):
+                        await asyncio.wait_for(
+                            group_export.list_groups(account_id, self.owner_id), timeout=2)
+            finally:
+                lock.release()
+            return warnings
+
+        self.assertEqual(asyncio.run(check_while_sending()), [])
+
     # --- #5: a send that may have gone through is "unknown", never "failed" -----
 
     def _run(self, fake, campaign):
@@ -267,7 +290,10 @@ class HardeningTests(unittest.TestCase):
             state, rows = self._run(fake, campaign)
         self.assertEqual(state, "failed")
         self.assertEqual(rows[0]["state"], "unknown")
-        self.assertEqual(rows[1]["state"], "failed")
+        # Never attempted, so still pending for Reuse -> "Not yet attempted".
+        self.assertEqual(rows[1]["state"], "pending")
+        page = self.http.get(f"/campaigns/{campaign}").text
+        self.assertIn("Sending stopped because the sender account had a problem", page)
 
     def test_unknown_is_not_offered_as_failed_on_reuse(self):
         campaign = self._queued_campaign(1)

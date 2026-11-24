@@ -75,6 +75,15 @@ def _fetch_account(account_id: str):
     return row
 
 
+def busy_sending(account_id: str) -> bool:
+    """True while a broadcast from this account is queued or sending."""
+    with database() as db:
+        return db.execute(
+            "SELECT 1 FROM campaigns WHERE account_id=? AND state IN ('queued','sending') LIMIT 1",
+            (account_id,),
+        ).fetchone() is not None
+
+
 def _save_state(account_id: str, state: str, username: str = "", code_hash: str | None = None,
                 last_error: str = ""):
     with database() as db:
@@ -176,6 +185,11 @@ async def verify_connected(account_id: str, *, cache_seconds: int = 0) -> str:
     Never sends a message or automatically signs in. A transient network
     failure does not mean that the Telegram session was revoked.
     """
+    row = _fetch_account(account_id)
+    if row["state"] == "connected" and busy_sending(account_id):
+        # A broadcast holds this account's lock until it ends; waiting here
+        # would freeze the page. The account is evidently connected.
+        return row["username"] or row["label"]
     async with account_lock(account_id):
         row = _fetch_account(account_id)
         if row["state"] != "connected":
@@ -370,7 +384,8 @@ async def dispatch(campaign_id: str):
             log.warning("Campaign %s ended with %s", campaign_id, type(exc).__name__)
             with database() as db:
                 db.execute("UPDATE campaigns SET state='failed',completed_at=? WHERE id=?", (now(),campaign_id))
-                db.execute("UPDATE deliveries SET state='failed',error='Sender unavailable',updated_at=? WHERE campaign_id=? AND state='pending'", (now(),campaign_id))
+                # Recipients not reached yet stay 'pending' (nothing was sent to
+                # them), so Reuse -> "Not yet attempted" can pick them up later.
                 # A send cut off by this error may or may not have reached Telegram.
                 db.execute("UPDATE deliveries SET state='unknown',error='Interrupted before delivery status was confirmed',updated_at=? WHERE campaign_id=? AND state='sending'", (now(),campaign_id))
                 db.commit()

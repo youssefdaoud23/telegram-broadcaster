@@ -116,6 +116,9 @@ async def _check_identity(client, account) -> None:
 
 async def list_groups(account_id: str, owner_id: int) -> list[dict]:
     """List up to the most recent 500 visible chat dialogs as group choices."""
+    if telegram.busy_sending(account_id):
+        raise telegram.TelegramProblem(
+            "This account is sending a broadcast. Try again when it finishes.")
     async with telegram.account_lock(account_id):
         account = _authorized_account(account_id, owner_id)
         client = telegram.new_client(account)
