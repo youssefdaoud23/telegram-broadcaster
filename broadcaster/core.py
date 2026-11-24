@@ -869,28 +869,6 @@ def bulk_update_contact_consent(
     return len(changes),len(rows)
 
 
-def set_group_members(db: sqlite3.Connection, owner_id: int,
-                      group_id: int, contact_ids: list[int]) -> None:
-    group=db.execute(
-        "SELECT 1 FROM contact_groups WHERE id=? AND owner_id=?",
-        (group_id,owner_id),
-    ).fetchone()
-    if not group:
-        raise ValueError("Group not found in your workspace")
-    if len(contact_ids)!=len(set(contact_ids)) or len(contact_ids)>20000:
-        raise ValueError("Invalid or duplicated contact selection")
-    if any(not isinstance(cid,int) or cid<=0 for cid in contact_ids):
-        raise ValueError("Invalid contact selection")
-    if _missing_contacts(db,owner_id,contact_ids):
-        raise ValueError("A selected contact does not exist in your workspace")
-    db.execute("DELETE FROM contact_group_members WHERE group_id=?", (group_id,))
-    for contact_id in sorted(contact_ids):
-        db.execute(
-            "INSERT INTO contact_group_members(group_id,contact_id,added_at) VALUES (?,?,?)",
-            (group_id,contact_id,now()),
-        )
-
-
 def insert_contact(db: sqlite3.Connection, data: dict[str,str], owner_id: int, *, consent: bool=False, enabled: bool=True) -> int:
     # De-duplicate by any supplied identifier, case insensitive for usernames.
     dup = db.execute("""

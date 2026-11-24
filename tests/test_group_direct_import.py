@@ -117,7 +117,7 @@ class DirectGroupImportTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM contact_group_members").fetchone()[0],3)
 
     def test_preexisting_contact_is_linked_and_verified_id_filled_without_optin_change(self):
-        scan=self.make_scan()
+        self.make_scan()
         group_id=None
         with core.database() as db:
             existing=core.insert_contact(
@@ -355,7 +355,7 @@ class DirectGroupImportTests(unittest.TestCase):
                 group_import.import_scan_members(db,scan,self.owner_id,"Test Group")
 
     def test_groups_title_sanitization_and_exported_user_ids(self):
-        scan=self.make_scan(title="  Public ; Group | North  ")
+        self.make_scan(title="  Public ; Group | North  ")
         page=self.http.get("/groups/scans/scan-token-123")
         self.assertIn('value="Public - Group - North"',page.text)
         result=self.http.get("/groups/scans/scan-token-123/export")

@@ -8,7 +8,7 @@
   </div>
   <span class="status status-{{ 'connected' if scan.state=='complete' else ('pending' if scan.state in ('queued','running') else 'disconnected') }}">{{ scan.state|capitalize }}</span>
 </div>
-<section class="panel" style="max-width:950px">
+<section class="panel wide-panel">
   <div class="panel-head"><h2>Member scan</h2></div>
   <div class="detail-stats group-scan-stats">
     <div><strong>{{ scan.seen }}</strong><small>Members inspected</small></div>
@@ -48,7 +48,7 @@
   {% elif scan.state=='failed' %}<a class="btn btn-outline" href="/groups">Choose another group</a>{% endif %}
 </section>
 {% if sample %}
-<section class="panel" style="max-width:950px">
+<section class="panel wide-panel">
   <div class="panel-head"><h2>Member preview <span class="count-pill">{{ sample|length }} shown</span></h2></div>
   <div class="table-scroll">
     <table class="group-member-table">

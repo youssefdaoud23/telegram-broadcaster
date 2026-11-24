@@ -153,7 +153,7 @@ class ContactGroupsTests(unittest.TestCase):
         a=self.add_contact("Alice","@group_alice01")
         b=self.add_contact("Bob","@group_bobby01",consent=False)
         c=self.add_contact("Charlie","@group_charly1")
-        response=self.post(f"/contacts/groups/{group}/members",
+        response=self.post(f"/contacts/groups/{group}/members/add",
                            {"contacts":[str(a),str(b)]})
         self.assertEqual(response.status_code,303)
         page=self.http.get(f"/contacts/groups/{group}")
@@ -174,9 +174,13 @@ class ContactGroupsTests(unittest.TestCase):
             record=core.contact_groups(db,self.owner_id)[0]
             self.assertEqual(record["total"],2)
             self.assertEqual(record["eligible"],1)
-        response=self.post(f"/contacts/groups/{group}/members",
-                           {"contacts":[str(a),str(c)]})
-        self.assertEqual(response.status_code,303)
+        self.assertEqual(self.post(f"/contacts/groups/{group}/members/remove",
+                                   {"contacts":[str(b)]}).status_code,303)
+        self.assertEqual(self.post(f"/contacts/groups/{group}/members/add",
+                                   {"contacts":[str(c)]}).status_code,303)
+        # The old whole-list replace endpoint is gone.
+        self.assertEqual(self.post(f"/contacts/groups/{group}/members",
+                                   {"contacts":[str(a)]}).status_code,404)
         with core.database() as db:
             self.assertEqual({k for k,v in core.contact_group_map(db,self.owner_id).items() if group in v},
                              {a,c})

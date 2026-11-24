@@ -63,7 +63,7 @@ class WebsiteTests(unittest.TestCase):
         anonymous=self.testclient.get("/",follow_redirects=False)
         self.assertEqual(anonymous.status_code,303)
         self.assertEqual(anonymous.headers["location"],"/login")
-        csrf=self.sign_in()
+        self.sign_in()
         for path in ["/","/contacts","/accounts","/accounts/new","/compose","/campaigns"]:
             r=self.testclient.get(path)
             self.assertEqual(r.status_code,200,(path,r.text[:300]))

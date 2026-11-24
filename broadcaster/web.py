@@ -651,26 +651,6 @@ async def update_group_members_additive(request: Request, group_id: int, action:
     )
 
 
-@app.post("/contacts/groups/{group_id}/members")
-async def edit_group_members(request: Request, group_id: int):
-    user=principal(request)
-    form=await request.form(max_fields=20_000)
-    authorize(request,str(form.get("csrf","")))
-    try:
-        contact_ids=[int(str(x)) for x in form.getlist("contacts")]
-        with core.database() as db:
-            if not db.execute(
-                "SELECT 1 FROM contact_groups WHERE id=? AND owner_id=?",
-                (group_id,user["admin_id"]),
-            ).fetchone():
-                raise HTTPException(404,"Contact group not found")
-            core.set_group_members(db,user["admin_id"],group_id,contact_ids)
-            db.commit()
-    except (ValueError,TypeError) as exc:
-        return redirect(f"/contacts/groups/{group_id}",str(exc))
-    return redirect(f"/contacts/groups/{group_id}","Group membership saved.")
-
-
 @app.post("/contacts/groups/{group_id}/delete")
 def delete_group_action(request: Request, group_id: int,csrf: str = Form("")):
     user=authorize(request,csrf)
